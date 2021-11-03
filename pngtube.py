@@ -1,6 +1,6 @@
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 from pathlib import Path
-import sounddevice, numpy, os, json, shutil
+import sounddevice, numpy, os, json, shutil, urllib
 
 class pngtube(SimpleHTTPRequestHandler):
     protocol_version='HTTP/1.1'
@@ -24,9 +24,9 @@ class pngtube(SimpleHTTPRequestHandler):
         else: # writing data succeeded
             self.send_response(200)
     def do_GET(self):
-        if not self.headers['Audio']:
+        if not self.path.startswith('/audio'):
             return SimpleHTTPRequestHandler.do_GET(self)
-        if self.headers['Audio']=='list':
+        if self.path == '/audio/':
             response=json.dumps(sounddevice.query_devices(kind='input'))
             if response.startswith('{'):
                 response="["+response+"]"
@@ -37,24 +37,18 @@ class pngtube(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(response.encode())
             return
-        device=self.headers['Audio']
+        device=urllib.parse.unquote(self.path[len('/audio/'):]) or None
         try:
             sounddevice.check_input_settings(device=device)
             self.send_response(200)
-            self.send_header('Transfer-Encoding','chunked')
-            self.send_header('Content-Type','text/plain')
+            self.send_header('Content-Type','text/event-stream')
             self.end_headers()
         except Exception as e:
             self.send_error(500,explain=str(e))
         def audioLoop(indata, frames, time, status):
-            def send(message):
-                self.wfile.write(str(message).encode())
-            message=str(numpy.linalg.norm(indata)*10)
             try:
-                send(len(message))
-                send('\r\n')
-                send(message)
-                send('\r\n')
+                message='data: '+str(numpy.linalg.norm(indata)*10)+'\n\n'
+                self.wfile.write(message.encode())
                 self.wfile.flush()
             except:
                 os._exit(0)
