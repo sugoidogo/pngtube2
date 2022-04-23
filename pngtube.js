@@ -8,10 +8,10 @@ async function setAudioListener(listener, device = null) {
         url += '/' + encodeURIComponent(device)
     }
     eventsource = new EventSource(url);
-    eventsource.onMessage = function (event) {
+    eventsource.onmessage = function (event) {
         listener(event.data)
     }
-    eventsource.onError = function () {
+    eventsource.onerror = function () {
         eventsource.close()
     }
     return eventsource

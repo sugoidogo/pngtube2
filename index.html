@@ -1,1 +1,266 @@
-<script src='pngtube.js'></script>
+<!DOCTYPE html>
+<head>
+  <title>PNGTuber</title>
+</head>
+<div id="imgdiv">
+  <img id="img"></img>
+</div>
+<div id="controls">
+  <img id="logo" src="logo.png" />
+  <p>Volume threshold</p>
+  <input type="range" id="volume-range" min="1" max="100" oninput="onVolumeRange(this.value)" />
+  <input type="number" id="volume-number" min="1" max="100" oninput="onVolumeNumber(this.value)" />
+  <p>Idle brightness</p>
+  <input type="range" id="brightness-range" min="1" max="100" oninput="onBrightnessRange(this.value)" />
+  <input type="number" id="brightness-number" min="1" max="100" oninput="onBrightnessNumber(this.value)" />
+  <p>Transition time</p>
+  <input type="range" id="time-range" min="0" max="1" step="0.01" oninput="onTimeRange(this.value)" />
+  <input type="number" id="time-number" min="0" max="1" step="0.01" oninput="onTimeNumber(this.value)" />
+  <p>Jump height</p>
+  <input type="range" id="height-range" min="0" max="100" oninput="onHeightRange(this.value)" />
+  <input type="number" id="height-number" min="0" max="100" oninput="onHeightNumber(this.value)" />
+  <p>Idle image</p>
+  <input type="file" accept="image/*" oninput="setIdle(this.files[0])" />
+  <p>Talking image</p>
+  <input type="file" accept="image/*" oninput="setTalking(this.files[0])" />
+</div>
+<style>
+  * {
+    font-size: 4vmin;
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 0px;
+  }
+
+  #img {
+    position: absolute;
+    max-width: 100vw;
+    max-height: 100vh;
+    transition-duration: 0.2s;
+  }
+
+  #imgdiv {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #controls:hover {
+    opacity: 1;
+  }
+
+  #controls {
+    width: 99vw;
+    height: 99vh;
+    position: absolute;
+    top: 0px;
+    background-color: rgba(127, 127, 127, 0.5);
+    opacity: 0;
+  }
+
+  #logo {
+    max-width: 100vw;
+    max-height: 25vh;
+  }
+
+  input[type=range] {
+    width: 75vw;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 1vw;
+    height: 3vh;
+    background-color: black;
+  }
+
+  input[type=range]::-webkit-slider-runnable-track {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 75vw;
+    height: 3vh;
+    background-color: white;
+  }
+
+  #volume-range {
+    --volume: 0%;
+    position: relative;
+    width: 75vw;
+    height: 3vh;
+    background-color: white;
+  }
+
+  #volume-range::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--volume);
+    background-color: rgba(0, 255, 0, 0.5);
+    transition: width 100ms linear;
+  }
+</style>
+<script src="https://localforage.github.io/localForage/localforage.min.js"></script>
+<script>
+  const VOLUME = "volume";
+  const VOLUME_RANGE = document.getElementById("volume-range");
+  const VOLUME_NUMBER = document.getElementById("volume-number");
+  const BRIGHTNESS = "brightness";
+  const BRIGHTNESS_RANGE = document.getElementById("brightness-range");
+  const BRIGHTNESS_NUMBER = document.getElementById("brightness-number");
+  const TIME="time";
+  const TIME_RANGE=document.getElementById("time-range");
+  const TIME_NUMBER=document.getElementById("time-number");
+  const HEIGHT="height";
+  const HEIGHT_RANGE=document.getElementById("height-range");
+  const HEIGHT_NUMBER=document.getElementById("height-number");
+  const IDLE_IMAGE = "idle-image";
+  const TALKING_IMAGE = "talking-image";
+  const IMAGE = document.getElementById("img");
+  const DEFAULT_VOLUME = 50;
+  const DEFAULT_BRIGHTNESS = 90;
+  const DEFAULT_TIME=0.2;
+  const DEFAULT_HEIGHT=5;
+  const DEFAULT_IDLE = "";
+  const DEFAULT_TALKING = "";
+  const LEGACY_BRIGHTNESS = "darkness";
+  const LEGACY_IDLE = "closed";
+  const LEGACY_TALKING = "open";
+  const storage = localforage;
+
+  let volume;
+  let brightness;
+  let time;
+  let idle;
+  let talking;
+  let height;
+
+  function setHeight(input){
+    height=input;
+    IMAGE.style.maxHeight=(100-height)+"vh";
+    IMAGE.style.top=height+"vh";
+  }
+
+  function setTime (input) {
+    document.getElementById("img").style.transitionDuration=input+'s';
+    time=input;
+  }
+
+  function setIdle(input) {
+    const reader = new FileReader();
+    reader.addEventListener("load", function () {
+      idle = reader.result;
+      storage.setItem(IDLE_IMAGE, reader.result);
+    }, false);
+    reader.readAsDataURL(input);
+  }
+
+  function setTalking(input) {
+    const reader = new FileReader();
+    reader.addEventListener("load", function () {
+      talking = reader.result;
+      storage.setItem(TALKING_IMAGE, reader.result);
+    }, false);
+    reader.readAsDataURL(input);
+  }
+
+  function onVolumeRange(input) {
+    volume = input;
+    VOLUME_NUMBER.value = input;
+    storage.setItem(VOLUME, input);
+  }
+
+  function onVolumeNumber(input) {
+    volume = input;
+    VOLUME_RANGE.value = input;
+    storage.setItem(VOLUME, input);
+  }
+
+  function onBrightnessRange(input) {
+    brightness = input;
+    BRIGHTNESS_NUMBER.value = input;
+    storage.setItem(BRIGHTNESS, input);
+  }
+
+  function onBrightnessNumber(input) {
+    brightness = input;
+    BRIGHTNESS_RANGE.value = input;
+    storage.setItem(BRIGHTNESS, input);
+  }
+
+  function onTimeRange(input) {
+    setTime(input);
+    TIME_NUMBER.value=input;
+    storage.setItem(TIME, input);
+  }
+
+  function onTimeNumber(input){
+    setTime(input);
+    TIME_RANGE.value=input;
+    storage.setItem(TIME, input);
+  }
+
+  function onHeightRange(input){
+    setHeight(input);
+    HEIGHT_NUMBER.value=input;
+    storage.setItem(HEIGHT,input);
+  }
+
+  function onHeightNumber(input){
+    setHeight(input);
+    HEIGHT_RANGE.value=input;
+    storage.setItem(HEIGHT,input);
+  }
+
+  window.onload = async function () {
+    try {
+      volume = await storage.getItem(VOLUME) || DEFAULT_VOLUME;
+      brightness = await storage.getItem(BRIGHTNESS) || DEFAULT_BRIGHTNESS;
+      idle = await storage.getItem(IDLE_IMAGE) || DEFAULT_IDLE;
+      talking = await storage.getItem(TALKING_IMAGE) || DEFAULT_TALKING;
+
+      setHeight(await storage.getItem(HEIGHT) || DEFAULT_HEIGHT);
+      setTime(await storage.getItem(TIME) || DEFAULT_TIME);
+
+      VOLUME_RANGE.value = volume;
+      VOLUME_NUMBER.value = volume;
+      BRIGHTNESS_RANGE.value = brightness;
+      BRIGHTNESS_NUMBER.value = brightness;
+      TIME_RANGE.value=time;
+      TIME_NUMBER.value=time;
+      HEIGHT_NUMBER.value=height;
+      HEIGHT_RANGE.value=height;
+      IMAGE.src = idle;
+
+      const volumeVisualizer = document.getElementById("volume-range");
+      const volumeCallback = async function(averageVolume) {
+        averageVolume=parseInt(averageVolume.data)
+        console.log(averageVolume)
+        volumeVisualizer.style.setProperty(
+          "--volume",
+          averageVolume + "%"
+        );
+        if (averageVolume <= volume) {
+          IMAGE.src = idle;
+          IMAGE.style.setProperty('filter', 'brightness(' + brightness + '%)');
+        } else if (IMAGE.src!=talking) {
+          IMAGE.src = talking;
+          IMAGE.style.setProperty('filter', 'brightness(100%)');
+          IMAGE.style.transitionTimingFunction='ease-out';
+          IMAGE.style.top="0vh";
+          await new Promise(r => setTimeout(r, time*1000));
+          IMAGE.style.transitionTimingFunction='ease-in';
+          IMAGE.style.top=height+"vh";
+        }
+      };
+
+      new EventSource(document.URL+'audio').onmessage=volumeCallback;
+    } catch (e) {
+      window.alert(e.message);
+      throw e;
+    }
+  }
+</script>
