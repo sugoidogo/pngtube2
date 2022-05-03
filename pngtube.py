@@ -41,4 +41,5 @@ class pngtube(SimpleHTTPRequestHandler):
             while not self.wfile.closed:
                 sounddevice.sleep(1)
 
+print("Starting server at http://localhost:5000")
 ThreadingHTTPServer(('localhost',5000), pngtube).serve_forever()
