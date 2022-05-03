@@ -38,7 +38,7 @@ class pngtube(SimpleHTTPRequestHandler):
             except:
                 pass
         with sounddevice.InputStream(device=device,callback=audioLoop):
-            while True:
+            while not self.wfile.closed:
                 sounddevice.sleep(1)
 
 ThreadingHTTPServer(('localhost',5000), pngtube).serve_forever()
