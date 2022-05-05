@@ -5,7 +5,7 @@ pidfile_path=script_dir+'pngtube.pid'
 def script_load(settings):
     pidfile=open(pidfile_path,'w')
     from subprocess import Popen
-    server=Popen('python '+script_dir+'pngtube.py')
+    server=Popen('python pngtube.py',cwd=script_dir)
     pidfile.write(str(server.pid))
     pidfile.close()
 
