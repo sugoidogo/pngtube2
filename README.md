@@ -10,6 +10,6 @@ Become a PNGTuber without using discord
 ## OBS Python Module
 OBS supports loading Python scripts as plugins, but this requires some setup.
 You can use [this installer](https://github.com/sugoidogo/obs-python-installer) to quickly get it set up.
-Once that's done, you can add `pngtube-obs.py` to the scripts in `OBS > Tools > Scripts > Loaded Scripts` and pngtube will open and close automatically with obs.
+Once that's done, you can add `pngtube.py` to the scripts in `OBS > Tools > Scripts > Loaded Scripts` and pngtube will open and close automatically with obs.
 ## Discord
 https://discord.gg/zxDnYSvMNw
