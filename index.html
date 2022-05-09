@@ -260,6 +260,9 @@
         let ev=new EventSource(document.URL+'audio')
         ev.onmessage=volumeCallback;
         ev.onerror=startAudio;
+        window.onbeforeunload=function(event=null){
+          ev.close()
+        }
       }
 
       startAudio();
