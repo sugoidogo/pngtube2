@@ -257,7 +257,7 @@
       };
 
       const startAudio=function (event=null){
-        let ev=new EventSource(document.URL+'audio')
+        let ev=new EventSource('http://localhost:5000/audio')
         ev.onmessage=volumeCallback;
         ev.onerror=startAudio;
         window.onbeforeunload=function(event=null){

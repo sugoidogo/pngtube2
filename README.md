@@ -1,9 +1,9 @@
 # PNGTube 2
 Become a PNGTuber without using discord
 ## Usage
-0. Install [Python](https://www.python.org/downloads/)
-1. Download the source code and run `pngtube.py`
-2. Add a Browser Source to your OBS with the url http://localhost:5000/
+0. Install [Python for OBS](https://github.com/sugoidogo/obs-python-installer/releases)
+1. Download [SugoiOBS.py](https://github.com/sugoidogo/sugoiobs/releases) and add the script to your OBS via `Tools > Scripts`
+2. Add a Browser Source to your OBS with the url https://sugoidogo.github.io/pngtube2/
 3. Right-Click on the Browser Source > `Interact` to change settings
 4. ...
 5. Profit?
