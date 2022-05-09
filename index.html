@@ -238,7 +238,6 @@
       const volumeVisualizer = document.getElementById("volume-range");
       const volumeCallback = async function(averageVolume) {
         averageVolume=parseInt(averageVolume.data)
-        console.log(averageVolume)
         volumeVisualizer.style.setProperty(
           "--volume",
           averageVolume + "%"
