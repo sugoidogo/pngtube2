@@ -257,7 +257,13 @@
         }
       };
 
-      new EventSource(document.URL+'audio').onmessage=volumeCallback;
+      const startAudio=function (event=null){
+        let ev=new EventSource(document.URL+'audio')
+        ev.onmessage=volumeCallback;
+        ev.onerror=startAudio;
+      }
+
+      startAudio();
     } catch (e) {
       window.alert(e.message);
       throw e;
