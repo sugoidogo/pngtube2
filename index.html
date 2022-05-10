@@ -13,9 +13,12 @@
   <p>Idle brightness</p>
   <input type="range" id="brightness-range" min="1" max="100" oninput="onBrightnessRange(this.value)" />
   <input type="number" id="brightness-number" min="1" max="100" oninput="onBrightnessNumber(this.value)" />
-  <p>Transition time</p>
+  <p>Animation transition time</p>
   <input type="range" id="time-range" min="0" max="1" step="0.01" oninput="onTimeRange(this.value)" />
   <input type="number" id="time-number" min="0" max="1" step="0.01" oninput="onTimeNumber(this.value)" />
+  <p>Silence transition delay</p>
+  <input type="range" id="delay-range" min="0" max="1" step="0.1" oninput="onDelayRange(this.value)" />
+  <input type="number" id="delay-number" min="0" max="1" step="0.1" oninput="onDelayNumber(this.value)" />
   <p>Jump height</p>
   <input type="range" id="height-range" min="0" max="100" oninput="onHeightRange(this.value)" />
   <input type="number" id="height-number" min="0" max="100" oninput="onHeightNumber(this.value)" />
@@ -114,6 +117,9 @@
   const TIME="time";
   const TIME_RANGE=document.getElementById("time-range");
   const TIME_NUMBER=document.getElementById("time-number");
+  const DELAY="delay"
+  const DELAY_RANGE=document.getElementById("delay-range");
+  const DELAY_NUMBER=document.getElementById("delay-number");
   const HEIGHT="height";
   const HEIGHT_RANGE=document.getElementById("height-range");
   const HEIGHT_NUMBER=document.getElementById("height-number");
@@ -126,6 +132,7 @@
   const DEFAULT_HEIGHT=5;
   const DEFAULT_IDLE = "";
   const DEFAULT_TALKING = "";
+  const DEFAULT_DELAY=0.5;
   const LEGACY_BRIGHTNESS = "darkness";
   const LEGACY_IDLE = "closed";
   const LEGACY_TALKING = "open";
@@ -137,6 +144,7 @@
   let idle;
   let talking;
   let height;
+  let delay;
 
   function setHeight(input){
     height=input;
@@ -215,12 +223,25 @@
     storage.setItem(HEIGHT,input);
   }
 
+  function onDelayRange(input){
+    delay=input;
+    DELAY_NUMBER.value=input;
+    storage.setItem(DELAY,input);
+  }
+
+  function onDelayNumber(input){
+    delay=input;
+    DELAY_RANGE.value=input;
+    storage.setItem(DELAY,input);
+  }
+
   window.onload = async function () {
     try {
       volume = await storage.getItem(VOLUME) || DEFAULT_VOLUME;
       brightness = await storage.getItem(BRIGHTNESS) || DEFAULT_BRIGHTNESS;
       idle = await storage.getItem(IDLE_IMAGE) || DEFAULT_IDLE;
       talking = await storage.getItem(TALKING_IMAGE) || DEFAULT_TALKING;
+      delay = await storage.getItem(DELAY) || DEFAULT_DELAY;
 
       setHeight(await storage.getItem(HEIGHT) || DEFAULT_HEIGHT);
       setTime(await storage.getItem(TIME) || DEFAULT_TIME);
@@ -233,6 +254,8 @@
       TIME_NUMBER.value=time;
       HEIGHT_NUMBER.value=height;
       HEIGHT_RANGE.value=height;
+      DELAY_RANGE.value = delay;
+      DELAY_NUMBER.value = delay;
       IMAGE.src = idle;
 
       const volumeVisualizer = document.getElementById("volume-range");
@@ -243,21 +266,25 @@
           "--volume",
           averageVolume + "%"
         );
-        if (averageVolume <= volume && backoff==null) {
-          IMAGE.src = idle;
-          IMAGE.style.setProperty('filter', 'brightness(' + brightness + '%)');
-        } else if (IMAGE.src!=talking) {
+        if (averageVolume <= volume) {
+          if(backoff==null){
+            IMAGE.src = idle;
+            IMAGE.style.setProperty('filter', 'brightness(' + brightness + '%)');
+          }
+        } else {
           if(backoff!=null){
             clearTimeout(backoff)
           }
-          backoff=setTimeout(()=>backoff=null,time*2000)
-          IMAGE.src = talking;
-          IMAGE.style.setProperty('filter', 'brightness(100%)');
-          IMAGE.style.transitionTimingFunction='ease-out';
-          IMAGE.style.top="0vh";
-          await new Promise(r => setTimeout(r, time*1000));
-          IMAGE.style.transitionTimingFunction='ease-in';
-          IMAGE.style.top=height+"vh";
+          backoff=setTimeout(()=>backoff=null,Math.max(time*2000,delay*1000))
+          if (IMAGE.src!=talking) {
+            IMAGE.src = talking;
+            IMAGE.style.setProperty('filter', 'brightness(100%)');
+            IMAGE.style.transitionTimingFunction='ease-out';
+            IMAGE.style.top="0vh";
+            await new Promise(r => setTimeout(r, time*1000));
+            IMAGE.style.transitionTimingFunction='ease-in';
+            IMAGE.style.top=height+"vh";
+          }
         }
       };
 
