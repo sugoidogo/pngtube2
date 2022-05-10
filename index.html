@@ -236,16 +236,21 @@
       IMAGE.src = idle;
 
       const volumeVisualizer = document.getElementById("volume-range");
+      let backoff=null
       const volumeCallback = async function(averageVolume) {
         averageVolume=Math.min(parseInt(averageVolume.data),100)
         volumeVisualizer.style.setProperty(
           "--volume",
           averageVolume + "%"
         );
-        if (averageVolume <= volume) {
+        if (averageVolume <= volume && backoff==null) {
           IMAGE.src = idle;
           IMAGE.style.setProperty('filter', 'brightness(' + brightness + '%)');
         } else if (IMAGE.src!=talking) {
+          if(backoff!=null){
+            clearTimeout(backoff)
+          }
+          backoff=setTimeout(()=>backoff=null,time*2000)
           IMAGE.src = talking;
           IMAGE.style.setProperty('filter', 'brightness(100%)');
           IMAGE.style.transitionTimingFunction='ease-out';
