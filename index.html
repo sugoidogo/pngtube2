@@ -281,9 +281,10 @@
             IMAGE.style.setProperty('filter', 'brightness(100%)');
             IMAGE.style.transitionTimingFunction='ease-out';
             IMAGE.style.top="0vh";
-            await new Promise(r => setTimeout(r, time*1000));
-            IMAGE.style.transitionTimingFunction='ease-in';
-            IMAGE.style.top=height+"vh";
+            setTimeout(()=>{
+              IMAGE.style.transitionTimingFunction='ease-in';
+              IMAGE.style.top=height+"vh";
+            },time*1000)
           }
         }
       };
