@@ -186,6 +186,11 @@
     reader.readAsDataURL(input);
   }
 
+  function setBrightness(input){
+    brightness = input;
+    SIMAGE.style.setProperty('filter', 'brightness(' + brightness + '%)');
+  }
+
   function onVolumeRange(input) {
     volume = input;
     VOLUME_NUMBER.value = input;
@@ -199,13 +204,13 @@
   }
 
   function onBrightnessRange(input) {
-    brightness = input;
+    setBrightness(input)
     BRIGHTNESS_NUMBER.value = input;
     storage.setItem(BRIGHTNESS, input);
   }
 
   function onBrightnessNumber(input) {
-    brightness = input;
+    setBrightness(input)
     BRIGHTNESS_RANGE.value = input;
     storage.setItem(BRIGHTNESS, input);
   }
