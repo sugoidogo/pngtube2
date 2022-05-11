@@ -290,6 +290,9 @@
       };
 
       const startAudio=function (event=null){
+        if(event){
+          console.log(event)
+        }
         let ev=new EventSource('http://localhost:5000/audio')
         ev.onmessage=volumeCallback;
         ev.onerror=startAudio;
