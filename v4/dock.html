@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+
+<body>
+    <table>
+        <tr>
+            <td>Idle Image</td>
+            <td>
+                <input type="file" accept="image/*" data-id="idle">
+            </td>
+        </tr>
+        <tr>
+            <td>Active Image</td>
+            <td>
+                <input type="file" accept="image/*" data-id="active">
+            </td>
+        </tr>
+        <tr>
+            <td>OBS URL</td>
+            <td>
+                <input type="url" data-id="url">
+            </td>
+        </tr>
+        <tr>
+            <td>OBS Password</td>
+            <td>
+                <input type="password" data-id="password">
+            </td>
+        </tr>
+        <tr>
+            <td>Audio Source</td>
+            <td>
+                <select data-id="source"></select>
+            </td>
+        </tr>
+        <tr>
+            <td>Idle Brightness</td>
+            <td>
+                <input type="range" data-id="brightness" min="1" max="100">
+                <input type="number" data-id="brightness" min="1" max="100">
+            </td>
+        </tr>
+        <tr>
+            <td>Jump Height</td>
+            <td>
+                <input type="range" data-id="height" min="0" max="100" />
+                <input type="number" data-id="height" min="0" max="100" />
+            </td>
+        </tr>
+        <tr>
+            <td>Animation Time</td>
+            <td>
+                <input type="range" data-id="time" min="0" max="1" step="0.01" />
+                <input type="number" data-id="time" min="0" max="1" step="0.01" />
+            </td>
+        </tr>
+    </table>
+</body>
+<script>
+    window.onload = async function () {
+        // set common variables
+        const JSUID = await (await fetch('jsuid')).text()
+        const broadcastChannel = new BroadcastChannel(JSUID)
+        // register oninput function for all inputs and selects
+        for (const element of document.querySelectorAll('input, select')) {
+            element.oninput = async function () {
+                const value = element.value
+                const id = element.dataset['id']
+                for (const input of element.parentElement.querySelectorAll('input')) {
+                    if (input == element) {
+                        continue
+                    }
+                    input.value = value
+                }
+                broadcastChannel.postMessage('set ' + id + ' ' + value)
+            }
+        }
+        // override oninput function for all file inputs
+        for (const element of document.querySelectorAll('[type=file]')) {
+            element.oninput = async function () {
+                for (const file of element.files) {
+                    const id = element.dataset['id']
+                    const fileReader = new FileReader()
+                    fileReader.onload = function () {
+                        const value = fileReader.result
+                        broadcastChannel.postMessage('set ' + id + ' ' + value)
+                    }
+                    fileReader.readAsDataURL(file)
+                }
+            }
+        }
+        // register onmessage function for broadcastChannel
+        broadcastChannel.onmessage = async function (event) {
+            const args = event.data.split(' ')
+            switch (args[0]) {
+                case 'ping': {
+                    broadcastChannel.postMessage('pong')
+                }
+                case 'pong': { // Both overlay and dock are now online
+                    // clear all sources, we're about to get new ones
+                    const selector = document.querySelector('[data-id="source"]')
+                    selector.innerHTML = ''
+                    selector.value = ''
+                    break
+                }
+                case 'set': { // sync mechanism
+                    const id = args[1]
+                    const value = args[2]
+                    for (const element of document.querySelectorAll('input[data-id=' + id + ']')) {
+                        /** 
+                         * if the value is already set in the ui, reject the change and trigger the input event, 
+                         * syncing to the existing value. ranges are set by the browser on creation, 
+                         * and their synced number input always comes next, so never reject, instead allowing the number to set the range.
+                         * always reject file inputs, which must be user-selected, triggering sending of any selected files.
+                         */
+                        if ((element.value == '' || element.type == 'range' || element.tagName.toLowerCase() == 'select') && element.type != 'file') {
+                            element.value = value
+                        } else {
+                            element.oninput()
+                        }
+                    }
+                    break
+                }
+                case 'add': {
+                    const value = args[1]
+                    const selector = document.querySelector('[data-id="source"]')
+                    const option = document.createElement('option')
+                    option.value = value
+                    option.innerHTML = value
+                    selector.appendChild(option)
+                    broadcastChannel.postMessage('get source')
+                    break
+                }
+                case 'remove': {
+                    const value = args[1]
+                    if (selector.value == value) {
+                        selector.value = ''
+                    }
+                    const selector = document.querySelector('[data-id="source"]')
+                    const option = selector.querySelector('[value="' + value + ']"')
+                    option.remove()
+                }
+                default: {
+                    window.alert(JSUID + '-dock did not understand this message:\n' + event.data)
+                }
+            }
+        }
+        // send startup completed ping
+        broadcastChannel.postMessage('ping')
+    }
+</script>
