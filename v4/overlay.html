@@ -29,7 +29,8 @@
 <script>
     window.onload = async function () {
         // set persistant variables
-        const JSUID = await (await fetch('jsuid')).text()
+        const params = new URLSearchParams(window.location.search)
+        const JSUID = await (await fetch('jsuid')).text() + params.get('id')
         const broadcastChannel = new BroadcastChannel(JSUID)
         localStorage = localforage.createInstance({ name: JSUID })
         const obs = new OBSWebSocket()
@@ -42,7 +43,7 @@
             active: '',
             url: 'ws://localhost:4455',
             password: '',
-            source: '',
+            sources: [],
             brightness: 50,
             height: 1,
             time: 0.2,
@@ -89,13 +90,16 @@
             if (!config.source in event) {
                 return
             }
-            // get the audio level of the selected source
+            // get the audio level of the selected sources
             /**
              * AUDIO LEVEL FORMAT
              * event[source][channel][?]=float
              * each channel contains an array of 3 floats
              */
-            var level = event[config.source][0][0]
+            let level = 0
+            for (const source of config.sources) {
+                level += event[source][0][0] || 0
+            }
             // animate the image if neccessary
             if (backoff) {
                 return
@@ -126,6 +130,9 @@
                     // trigger sync mechanism
                     for (const id in config) {
                         broadcastChannel.postMessage('set ' + id + ' ' + config[id])
+                    }
+                    for (const source of config.sources) {
+                        broadcastChannel.postMessage('enable ' + source)
                     }
                     sources = []
                     break
@@ -162,6 +169,19 @@
                     broadcastChannel.postMessage('set ' + id + ' ' + value)
                     break
                 }
+                case 'enable': {
+                    const source = args[1]
+                    config.sources.push(source)
+                    localStorage.setItem('sources', JSON.stringify(config.sources))
+                    break
+                }
+                case 'disable': {
+                    const source = args[1]
+                    const index = config.sources.indexOf(source)
+                    config.sources.splice(index, 1)
+                    localStorage.setItem('sources', JSON.stringify(config.sources))
+                    break
+                }
                 default: {
                     window.alert(JSUID + '-overlay did not understand this message:\n' + event.data)
                 }
@@ -175,6 +195,7 @@
             config[id] = await localStorage.getItem(id) || config[id]
             broadcastChannel.postMessage('set ' + id + ' ' + config[id])
         }
+        config.sources = JSON.parse(await localStorage.getItem('sources')) || []
         // apply config
         IMAGE.src = config.active
         IMAGE.style.height = 100 - config.height + 'vh'

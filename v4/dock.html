@@ -27,9 +27,16 @@
             </td>
         </tr>
         <tr>
-            <td>Audio Source</td>
+            <td>Audio Sources</td>
             <td>
                 <select data-id="source"></select>
+                <button id="addSource">Add</button>
+                <ul>
+                    <li hidden>
+                        <button id="removeSource">Remove</button>
+                        <label></label>
+                    </li>
+                </ul>
             </td>
         </tr>
         <tr>
@@ -58,10 +65,11 @@
 <script>
     window.onload = async function () {
         // set common variables
-        const JSUID = await (await fetch('jsuid')).text()
+        const params = new URLSearchParams(window.location.search)
+        const JSUID = await (await fetch('jsuid')).text() + params.get('id')
         const broadcastChannel = new BroadcastChannel(JSUID)
-        // register oninput function for all inputs and selects
-        for (const element of document.querySelectorAll('input, select')) {
+        // register oninput function for all inputs
+        for (const element of document.querySelectorAll('input')) {
             element.oninput = async function () {
                 const value = element.value
                 const id = element.dataset['id']
@@ -88,6 +96,41 @@
                 }
             }
         }
+        /**
+         * onclick function for removeSource
+         * @param {Event} event
+         */
+        async function removeSource(event) {
+            const button = event.target
+            const parent = button.parentElement
+            const label = parent.querySelector('label')
+            const source = label.innerHTML
+            parent.remove()
+            broadcastChannel.postMessage('disable ' + source)
+            console.log(source)
+        }
+        /**
+         * onclick function for addSource
+         * @param {Event} event
+         * @param {String} source
+         */
+        async function addSource(event = null, sourceName = null) {
+            const select = document.querySelector('[data-id="source"]')
+            const source = select.value
+            const parent = select.parentElement
+            const list = parent.querySelector('ul')
+            const listItem = parent.querySelector('li').cloneNode(true)
+            const label = listItem.querySelector('label')
+            const rbutton = listItem.querySelector('button')
+            rbutton.onclick = removeSource
+            label.innerHTML = sourceName || source
+            listItem.hidden = false
+            list.appendChild(listItem)
+            if (sourceName == null) {
+                broadcastChannel.postMessage('enable ' + source)
+            }
+        }
+        document.querySelector('#addSource').onclick = addSource
         // register onmessage function for broadcastChannel
         broadcastChannel.onmessage = async function (event) {
             const args = event.data.split(' ')
@@ -100,6 +143,10 @@
                     const selector = document.querySelector('[data-id="source"]')
                     selector.innerHTML = ''
                     selector.value = ''
+                    const list=document.querySelector('ul')
+                    const listItem=document.querySelector('li')
+                    list.innerHTML=''
+                    list.appendChild(listItem)
                     break
                 }
                 case 'set': { // sync mechanism
@@ -138,6 +185,17 @@
                     const selector = document.querySelector('[data-id="source"]')
                     const option = selector.querySelector('[value="' + value + ']"')
                     option.remove()
+                    break
+                }
+                case 'enable': {
+                    const source = args[1]
+                    addSource(null, source)
+                }
+                case 'disable': {
+                    const source=args[1]
+                    const label=document.querySelector('[innerHTML="'+source+'"]')
+                    const listItem=label.parentElement
+                    listItem.remove()
                 }
                 default: {
                     window.alert(JSUID + '-dock did not understand this message:\n' + event.data)

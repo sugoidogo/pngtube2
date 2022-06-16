@@ -8,6 +8,9 @@ Become a PNGTuber without using discord
 1. Add a browser source with the url https://sugoidogo.github.io/pngtube2/v4/overlay.html
     - **The overlay will be empty when you first add it. This is normal.**
 2. Add a custom browser dock (Docks > Custom Browser Docks) with the url https://sugoidogo.github.io/pngtube2/v4/dock.html
+    - to run multiple instances, add `?id=somename` to both the dock and overlay url.
+        - replace `somename` with something identifiable
+        - the dock and overlay must have the same id to be able to change settings
 3. Add your images and any password that is set in the websocket settings (Tools > OBS-Websocket Settings)
 4. **Add a Noise Gate Filter to the source you plan to use.** The audio levels reported by obs are in a format I don't understand. You are welcome to open an issue if you can detail how to convert the values into decibles, like shown on OBS's audio mixer. For now, you should adjust some settings on the noise gate:
     1. Close Threshold: How quiet your audio source must be before it's cut off.
