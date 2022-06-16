@@ -196,6 +196,11 @@
             broadcastChannel.postMessage('set ' + id + ' ' + config[id])
         }
         config.sources = JSON.parse(await localStorage.getItem('sources')) || []
+        const source=await localStorage.getItem('source')
+        if(source){
+            config.sources.push(source)
+            localStorage.removeItem('source')
+        }
         // apply config
         IMAGE.src = config.active
         IMAGE.style.height = 100 - config.height + 'vh'
