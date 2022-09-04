@@ -56,6 +56,7 @@
                         <ul>
                             <li hidden>
                                 <button onclick="this.parentElement.remove()">Remove</button>
+                                <button onclick="addGate(this.parentElement)" hidden id="noiseGate">Add Noise Gate</button>
                                 <label data-id="source"></label>
                             </li>
                         </ul>
@@ -544,6 +545,34 @@
         listItem.hidden=false
         listItem.querySelector('label').innerHTML=value
         parentElement.querySelector('ul').appendChild(listItem)
+        obs.call('GetSourceFilterList',{
+            sourceName:value
+        }).then(function(data){
+            for(const filter of data.filters){
+                if(filter.filterKind=='noise_gate_filter'){
+                    return
+                }
+            }
+            listItem.querySelector('#noiseGate').hidden=false
+        })
+    }
+
+    function addGate(parentElement){
+        const name=parentElement.querySelector('label').innerHTML
+        obs.call('CreateSourceFilter',{
+            sourceName:name,
+            filterName:'Noise Gate',
+            filterKind:'noise_gate_filter',
+            filterSettings:{
+                attack_time:25,
+                release_time:50,
+                close_threshold:-60,
+                open_threshold:-60
+            }
+        }).then(function(){
+            parentElement.querySelector('#noiseGate').hidden=true
+            obs.call('OpenInputFiltersDialog',{inputName:name})
+        })
     }
 
 </script>
