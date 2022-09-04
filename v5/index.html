@@ -22,7 +22,6 @@
             <br>
             <button onclick="screenCapture()">Capture from Screen</button>
             <button onclick="cameraCapture()">Capture from Camera</button>
-            <button onclick="qrScan()" id='qrscan' hidden>Scan QR Code</button>
             <br>
         </span>
     </span>
@@ -53,11 +52,11 @@
                     <td>Audio Sources</td>
                     <td>
                         <select data-id="source"></select>
-                        <button id="addSource">Add</button>
+                        <button onclick="addSource(this.parentElement)">Add</button>
                         <ul>
                             <li hidden>
-                                <button id="removeSource">Remove</button>
-                                <label></label>
+                                <button onclick="this.parentElement.remove()">Remove</button>
+                                <label data-id="source"></label>
                             </li>
                         </ul>
                     </td>
@@ -150,6 +149,7 @@
         console.warn('connection closed', error.code, error.message)
         document.querySelector('#upgrades').innerHTML=''
         document.querySelector('#inputSettings').innerHTML=''
+        document.querySelector('select').innerHTML=''
     })
     obs.addListener('ConnectionOpened',function onConnectionOpened(){
         console.info('connected to socket, saving url')
@@ -159,11 +159,18 @@
     obs.addListener('Identified',async function onIdentified(){
         console.info('authentication passed, saving password')
         localStorage.setItem('password',document.querySelector('#password').value)
+        const video=document.querySelector('#qrvideo')
+        if(video.srcObject!=null){
+            video.srcObject.getTracks().forEach(function stopCapture(track){
+                track.stop()
+            })
+            video.srcObject=null
+        }
         document.querySelector('#status').innerHTML='Loading OBS data...'
         const loadingPromises=[]
-        console.info('getting browser input list')
-        loadingPromises.push(obs.call('GetInputList',{inputKind:'browser_source'}).then(function onReceiveBrowserInputList(response){
-            console.info('got browser input list:',response)
+        console.info('getting input list')
+        loadingPromises.push(obs.call('GetInputList',{}).then(function onReceiveBrowserInputList(response){
+            console.info('got input list:',response)
             const inputPromises=[]
             console.info('getting input settings')
             for(const input of response.inputs){
@@ -204,6 +211,23 @@
         const element=document.querySelector('#'+input.oldInputName)
         element.id=input.inputName
         element.querySelector('#name').innerHTML=input.inputName
+        obs.call('GetPersistentData',{
+            realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+            slotName:'pngtubev5'+input.oldInputName
+        }).then(function(data){
+            obs.call('SetPersistentData',{
+                realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+                slotName:'pngtubev5'+input.oldInputName,
+                slotValue:{}
+            })
+            obs.call('SetPersistentData',{
+                realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+                slotName:'pngtubev5'+input.inputName,
+                slotValue:data.slotValue
+            }).then(function(){
+                setURL(input.inputName)
+            })
+        })
     })
 
     console.info('connecting to obs')
@@ -230,12 +254,14 @@
         document.querySelector('#qr').hidden=false
     }
 
+    let interval
+
     function startQr(videoSource){
         const video=document.querySelector('#qrvideo')
         video.srcObject=videoSource
         video.play()
         video.hidden=false
-        document.querySelector('#qrscan').hidden=false
+        interval=setInterval(qrScan,1000)
     }
 
     async function screenCapture(){
@@ -244,21 +270,27 @@
     }
 
     async function cameraCapture(){
-        const qrScanner=new QrScanner(video,onQrScan,{returnDetailedScanResult:true})
-        qrScanner.start()
+        const videoSource=await navigator.mediaDevices.getUserMedia({video:true})
+        startQr(videoSource)
     }
 
     function qrScan(){
         const video=document.querySelector('#qrvideo')
-        QrScanner.scanImage(video,{returnDetailedScanResult:true}).then(onQrScan)
+        QrScanner.scanImage(video,{returnDetailedScanResult:true})
+            .then(onQrScan).catch(function(error){console.warn(error)})
     }
 
     async function onQrScan(result){
         var data=result.data.split('/')
-        const password=data.pop()
-        const fullurl='ws://'+data.pop()
+        if(data.shift()!='obsws:'){
+            return false
+        }
+        clearInterval(interval)
+        data.shift()
+        const fullurl='ws://'+data.shift()
         const port=fullurl.split(':').pop()
         const localurl='ws://localhost:'+port
+        const password=data.shift()
         const obsurl=document.querySelector('#url')
         const obspassword=document.querySelector('#password')
         obspassword.value=password
@@ -270,7 +302,8 @@
         if(await connect()){
             return true
         }
-
+        interval=setInterval(qrScan,1000)
+        return false
     }
 
     function getOverlayURL(name=''){
@@ -280,7 +313,9 @@
         const obspassword=document.querySelector('#password')
         searchParams.set('name',name)
         searchParams.set('obsurl',obsurl.value)
-        searchParams.set('obspassword',obspassword.value)
+        if(obspassword.value){
+            searchParams.set('obspassword',obspassword.value)
+        }
         return url.href
     }
 
@@ -316,12 +351,48 @@
         document.querySelector('#upgrades').appendChild(upgradePrompt)
     }
 
+    const settings={}
+
     function addSettings(name){
-        console.info('adding settings for '+name)
+        console.info('getting settings for',name)
         const settings=document.querySelector('#settings').cloneNode(true)
         settings.hidden=false
         settings.querySelector('#name').innerHTML=name
         settings.id=name
+        obs.call('GetPersistentData',{
+            realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+            slotName:'pngtubev5'+name
+        }).then(function(data){
+            data=data.slotValue
+            console.log('got settings for ',name,data)
+            if(data==null){
+                data={
+                    idle:'',
+                    active:'',
+                    source:[],
+                    brightness:50,
+                    height:1,
+                    time:0.2
+                }
+            }
+            settings[name]=data
+            for(const input of settings.querySelectorAll('input[type=range],input[type=number]')){
+                const id=input.dataset.id
+                let input2
+                if(input.type=='range'){
+                    input2=settings.querySelector('input[type=number][data-id='+id+']')
+                }else{
+                    input2=settings.querySelector('input[type=range][data-id='+id+']')
+                }
+                input.oninput=function(){
+                    input2.value=input.value
+                }
+                input.value=data[id]
+            }
+            for(const source of data.source){
+                addSource(settings,source)
+            }
+        })
         document.querySelector('#inputSettings').appendChild(settings)
     }
 
@@ -352,6 +423,12 @@
     }
 
     function checkInput(input){
+        const option=document.createElement('option')
+        option.value=input.inputName
+        option.innerHTML=input.inputName
+        for(const select of document.querySelectorAll('select[data-id=source]')){
+            select.appendChild(option)
+        }
         if(input.inputKind!='browser_source'){
             return
         }
@@ -376,6 +453,97 @@
     function onInputRemoved(input){
         console.info('input removed',input)
         document.querySelector('#'+input.inputName).remove()
+        for(const option of document.querySelectorAll('option[value='+input.inputName+']')){
+            option.remove()
+        }
+        obs.call('SetPersistentData',{
+            realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+            slotName:'pngtubev5'+input.inputName,
+            slotValue:{}
+        })
+    }
+
+    function save(name){
+        const settings=document.querySelector('#'+name)
+        const data=settings[name]
+        for(const input of settings.querySelectorAll('input[type=number]')){
+            data[input.dataset.id]=input.value
+        }
+        data.source=[]
+        for(const source of settings.querySelectorAll('label[data-id=source]')){
+            if(source.innerHTML){
+                data.source.push(source.innerHTML)
+            }
+        }
+        const files=[]
+        for(const image of settings.querySelectorAll('input[type=file]')){
+            for(const file of image.files){
+                files.push(new Promise(function(resolve){
+                    const id=image.dataset.id
+                    const fileReader = new FileReader()
+                    fileReader.onload = function () {
+                        data[id]=fileReader.result
+                        resolve()
+                    }
+                    fileReader.readAsDataURL(file)
+                }))
+            }
+        }
+        Promise.all(files).then(function(){
+            console.log('saving data:',data)
+            obs.call('SetPersistentData',{
+                realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+                slotName:'pngtubev5'+name,
+                slotValue:data
+            }).then(function(){
+                obs.call('SetInputSettings',{
+                    inputName:name,
+                    inputSettings:{url:''}
+                }).then(function(){
+                    obs.call('SetInputSettings',{
+                    inputName:name,
+                    inputSettings:{url:getOverlayURL(name)}
+                    }).catch(genericError)
+                })
+            })
+            let width=0
+            let height=0
+            let imagePromises=[]
+            for(const source of [data.active,data.idle]){
+                imagePromises.push(new Promise(function(resolve){
+                    const image=new Image();
+                    image.onload=function(){
+                        if(image.naturalWidth>width){
+                            width=image.naturalWidth
+                        }
+                        if(image.naturalHeight>height){
+                            height=image.naturalHeight
+                        }
+                        resolve()
+                    }
+                    image.src=source
+                }))
+            }
+            Promise.all(imagePromises).then(function(){
+                obs.call('SetInputSettings',{
+                    inputName:name,
+                    inputSettings:{
+                        width:width,
+                        height:height
+                    }
+                })
+            })
+        })
+    }
+
+    function addSource(parentElement,value=null){
+        if(value==null){
+            value=parentElement.querySelector('select').value
+        }
+        const listItem=parentElement.querySelector('li').cloneNode(true)
+        listItem.hidden=false
+        listItem.querySelector('label').innerHTML=value
+        parentElement.querySelector('ul').appendChild(listItem)
     }
 
 </script>

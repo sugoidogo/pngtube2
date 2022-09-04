@@ -1,9 +1,109 @@
 <!DOCTYPE html>
-<script src="https://cdn.jsdelivr.net/npm/obs-websocket-js@5.0.1/dist/obs-ws.min.js"
-    integrity="sha256-UbkntZrYTokZf8tldcF9nmOn5CNgcmDP+MNsUcKUpEE=" crossorigin="anonymous"></script>
+
+<body>
+    <img data-id="idle">
+    <img data-id="active">
+</body>
+<style>
+    body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    img {
+        position: absolute;
+        bottom: 0vh;
+        margin-left: auto;
+        margin-right: auto;
+        height: 100vh;
+    }
+
+    [data-id="active"] {
+        opacity: 0;
+        transition-property: bottom;
+    }
+</style>
+<script 
+    src="https://cdn.jsdelivr.net/npm/obs-websocket-js@5.0.1/dist/obs-ws.min.js" 
+    integrity="sha256-UbkntZrYTokZf8tldcF9nmOn5CNgcmDP+MNsUcKUpEE=" 
+    crossorigin="anonymous">
+</script>
 <script>
-    'use strict'
-    const obs = new OBSWebSocket()
-    const urlSearchParams = new URLSearchParams(window.location.search)
-    obs.connect(urlSearchParams.get('obsurl'), urlSearchParams.get('obspassword'))
+    window.onload = async function () {
+        // set persistant variables
+        const params = new URLSearchParams(window.location.search)
+        const obs = new OBSWebSocket()
+        const SIMAGE = document.querySelector('[data-id="idle"]')
+        const IMAGE = document.querySelector('[data-id="active"]')
+        let backoff = false
+        IMAGE.style.transitionTimingFunction = 'ease-out'
+        // attempt obs connection
+        await obs.connect(url = params.get('obsurl'), password = params.get('obspassword'), {
+            eventSubscriptions: (1 << 16),
+        })
+        // get config
+        const config=(await obs.call('GetPersistentData',{
+            realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+            slotName:'pngtubev5'+params.get('name')
+        })).slotValue
+        console.log(config)
+        // register ontransitionend function for active image
+        IMAGE.ontransitionend = async function () {
+            if (IMAGE.style.transitionTimingFunction == 'ease-out') {
+                IMAGE.style.transitionTimingFunction = 'ease-in'
+            } else {
+                IMAGE.style.transitionTimingFunction = 'ease-out'
+            }
+            if (IMAGE.style.bottom == '0vh') {
+                backoff = false
+            } else {
+                IMAGE.style.bottom = '0vh'
+            }
+        }
+        // register oninputvolumemeters for obs
+        obs.addListener('InputVolumeMeters', function (data) {
+            // construct event object
+            const inputs = data.inputs
+            const event = {}
+            for (const input of inputs) {
+                event[input.inputName] = input.inputLevelsMul
+            }
+            // get the audio level of the selected sources
+            /**
+             * AUDIO LEVEL FORMAT
+             * event[source][channel][?]=float
+             * each channel contains an array of 3 floats
+             */
+            let level = 0
+            for (const source of config.source) {
+                level += event[source][0][0] //|| 0
+            }
+            // animate the image if neccessary
+            if (backoff) {
+                return
+            }
+            if (level != 0) {
+                if (IMAGE.style.opacity == 1) {
+                    return
+                }
+                if (config.time != 0) {
+                    backoff = true
+                }
+                IMAGE.style.opacity = 1
+                SIMAGE.style.opacity = 0
+                IMAGE.style.bottom = config.height + 'vh'
+            } else {
+                SIMAGE.style.opacity = 1
+                IMAGE.style.opacity = 0
+            }
+        })
+        // apply config
+        IMAGE.src = config.active
+        IMAGE.style.height = 100 - config.height + 'vh'
+        IMAGE.style.transitionDuration = config.time + 's'
+        SIMAGE.src = config.idle
+        SIMAGE.style.height = 100 - config.height + 'vh'
+        SIMAGE.style.filter = 'brightness(' + config.brightness + '%)'
+    }
 </script>
