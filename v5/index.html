@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<body>
+    <div id="status">Loading...</div>
+    <span id="connectionSettings" hidden>
+        <table>
+            <tr>
+                <td>Websocket URL:</td>
+                <td><input id="url" type="url"></td>
+            </tr>
+            <tr>
+                <td>Websocket Password:</td>
+                <td><input id="password" type="password"></td>
+            </tr>
+        </table>
+        <button id="connect" onclick="connect()">Connect</button>
+        <button id="useQR" onclick="useQrCode()">Use QR Code</button>
+        <br>
+        <span id="qr" hidden>
+            <video id="qrvideo" hidden></video>
+            <br>
+            <span>Make sure this device and the one running OBS are on the same network.</span>
+            <br>
+            <button onclick="screenCapture()">Capture from Screen</button>
+            <button onclick="cameraCapture()">Capture from Camera</button>
+            <button onclick="qrScan()" id='qrscan' hidden>Scan QR Code</button>
+            <br>
+        </span>
+    </span>
+    <span id="connected">
+        <div id="upgradePrompt" class="bordered" hidden>
+            <span id="name"></span>
+            <span> is using another version of PNGTube. Switch to this version?</span>
+            <button onclick="upgrade(this.parentElement.id)">Switch</button>
+            <button onclick="remove(this.parentElement.id)">Remove</button>
+        </div>
+        <span id="upgrades"></span>
+        <div id="settings" class="bordered" hidden>
+            <div id="name"></div>
+            <table>
+                <tr>
+                    <td>Idle Image</td>
+                    <td>
+                        <input type="file" accept="image/*" data-id="idle">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Active Image</td>
+                    <td>
+                        <input type="file" accept="image/*" data-id="active">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Audio Sources</td>
+                    <td>
+                        <select data-id="source"></select>
+                        <button id="addSource">Add</button>
+                        <ul>
+                            <li hidden>
+                                <button id="removeSource">Remove</button>
+                                <label></label>
+                            </li>
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Idle Brightness</td>
+                    <td>
+                        <input type="range" data-id="brightness" min="1" max="100">
+                        <input type="number" data-id="brightness" min="1" max="100">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Jump Height</td>
+                    <td>
+                        <input type="range" data-id="height" min="0" max="100" />
+                        <input type="number" data-id="height" min="0" max="100" />
+                    </td>
+                </tr>
+                <tr>
+                    <td>Animation Time</td>
+                    <td>
+                        <input type="range" data-id="time" min="0" max="1" step="0.01" />
+                        <input type="number" data-id="time" min="0" max="1" step="0.01" />
+                    </td>
+                </tr>
+            </table>
+            <button onclick="save(this.parentElement.id)">Save and Apply</button>
+            <button onclick="remove(this.parentElement.id)">Remove</button>
+        </div>
+        <span id="inputSettings"></span>
+        <span id="newInput">
+            <table>
+                <tr>
+                    <td>Scene:</td>
+                    <td><select id="scene"></select></td>
+                </tr>
+                <tr>
+                    <td>Name:</td>
+                    <td><input type="text" id="newName"></td>
+                </tr>
+            </table>
+            <button onclick="addNew()">Add new PNGTube</button>
+        </span>
+    </span>
+</body>
+<style>
+    .bordered {
+        border: 1px solid black;
+    }
+    video {
+        max-width: 100vw;
+        max-height: 50vh;
+    }
+</style>
+<script 
+    src="https://cdn.jsdelivr.net/npm/obs-websocket-js@5.0.1/dist/obs-ws.min.js" 
+    integrity="sha256-UbkntZrYTokZf8tldcF9nmOn5CNgcmDP+MNsUcKUpEE=" 
+    crossorigin="anonymous">
+</script>
+<script 
+    src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.1/qr-scanner.umd.min.js" 
+    integrity="sha256-jstRoCLjzwXwLN2o0DMkkwRHtqYCQMxrRkktAHwZekU=" 
+    crossorigin="anonymous"></script>
+<script>
+    'use strict'
+
+    console.info('loading settings or defaults')
+    document.querySelector('#url').value=localStorage.getItem('url') || 'ws://localhost:4455'
+    document.querySelector('#password').value=localStorage.getItem('password') || ''
+
+    console.info('initializing obs-websocket-js')
+    const obs = new OBSWebSocket()
+    obs.addListener('ConnectionClosed',function onConnectionClosed(error){
+        document.querySelector('#connected').hidden=true
+        document.querySelector('#connectionSettings').hidden=false
+        switch(error.code){
+            case 1006:
+                document.querySelector('#status').innerHTML='obs websocket not found.<br>'+
+                    'Is <a href="https://github.com/obsproject/obs-websocket/releases/latest">obs-websocket</a> installed?<br>'+
+                    'Is obs open? Check your websocket settings in OBS under the Tools menu.'
+                break
+            case 4009:
+                document.querySelector('#status').innerHTML=error.message.split(' ').slice(-3).join(' ').toLowerCase().replace('authentication','Password')+
+                    '<br>You can view or change your websocket password in OBS under the Tools menu.'
+                break
+            default:
+                document.querySelector('#status').innerHTML='connection closed: Error '+error.code+': '+error.message
+                break
+        }
+        console.warn('connection closed', error.code, error.message)
+        document.querySelector('#upgrades').innerHTML=''
+        document.querySelector('#inputSettings').innerHTML=''
+    })
+    obs.addListener('ConnectionOpened',function onConnectionOpened(){
+        console.info('connected to socket, saving url')
+        localStorage.setItem('url',document.querySelector('#url').value)
+        document.querySelector('#connectionSettings').hidden=true
+    })
+    obs.addListener('Identified',async function onIdentified(){
+        console.info('authentication passed, saving password')
+        localStorage.setItem('password',document.querySelector('#password').value)
+        document.querySelector('#status').innerHTML='Loading OBS data...'
+        const loadingPromises=[]
+        console.info('getting browser input list')
+        loadingPromises.push(obs.call('GetInputList',{inputKind:'browser_source'}).then(function onReceiveBrowserInputList(response){
+            console.info('got browser input list:',response)
+            const inputPromises=[]
+            console.info('getting input settings')
+            for(const input of response.inputs){
+                inputPromises.push(obs.call('GetInputSettings',{inputName:input.inputName}).then(function onReceiveBrowserInputSettings(response){
+                    Object.assign(input,response)
+                    checkInput(input)
+                    return input
+                }).catch(function onParseError(error){
+                    console.error(input.inputName,error)
+                }))
+            }
+            loadingPromises.push(Promise.all(inputPromises).then(function onBrowserInputsFiltered(data){
+                console.info('got input settings:',data)
+            }))
+        }))
+        console.info('getting scene list')
+        loadingPromises.push(obs.call('GetSceneList',{}).then(function onReceiveSceneList(response){
+            console.info('got scene list:',response)
+            const scenes=document.querySelector('#scene')
+            for(const scene of response.scenes){
+                const option=document.createElement('option')
+                option.value=scene.sceneName
+                option.innerHTML=scene.sceneName
+                scenes.appendChild(option)
+            }
+        }))
+        while(loadingPromises.length!=0){
+            await loadingPromises.shift()
+        }
+        console.info('loading finished')
+        document.querySelector('#status').innerHTML='Ready'
+        document.querySelector('#connected').hidden=false
+    })
+    obs.addListener('InputCreated',checkInput)
+    obs.addListener('InputRemoved',onInputRemoved)
+    obs.addListener('InputNameChanged',function onInputNameChanged(input){
+        console.info('input name changed',input)
+        const element=document.querySelector('#'+input.oldInputName)
+        element.id=input.inputName
+        element.querySelector('#name').innerHTML=input.inputName
+    })
+
+    console.info('connecting to obs')
+    connect()
+
+    function log(...data){
+        console.log(data)
+    }
+
+    async function connect(){
+        document.querySelector('#status').innerHTML='Connecting to OBS...'
+        try{
+            await obs.connect(
+                document.querySelector('#url').value,
+                document.querySelector('#password').value
+            )
+        }catch(e){
+            return false
+        }
+        return true
+    }
+
+    function useQrCode(){
+        document.querySelector('#qr').hidden=false
+    }
+
+    function startQr(videoSource){
+        const video=document.querySelector('#qrvideo')
+        video.srcObject=videoSource
+        video.play()
+        video.hidden=false
+        document.querySelector('#qrscan').hidden=false
+    }
+
+    async function screenCapture(){
+        const mediaSource=await navigator.mediaDevices.getDisplayMedia()
+        startQr(mediaSource)
+    }
+
+    async function cameraCapture(){
+        const qrScanner=new QrScanner(video,onQrScan,{returnDetailedScanResult:true})
+        qrScanner.start()
+    }
+
+    function qrScan(){
+        const video=document.querySelector('#qrvideo')
+        QrScanner.scanImage(video,{returnDetailedScanResult:true}).then(onQrScan)
+    }
+
+    async function onQrScan(result){
+        var data=result.data.split('/')
+        const password=data.pop()
+        const fullurl='ws://'+data.pop()
+        const port=fullurl.split(':').pop()
+        const localurl='ws://localhost:'+port
+        const obsurl=document.querySelector('#url')
+        const obspassword=document.querySelector('#password')
+        obspassword.value=password
+        obsurl.value=localurl
+        if(await connect()){
+            return true
+        }
+        obsurl.value=fullurl
+        if(await connect()){
+            return true
+        }
+
+    }
+
+    function getOverlayURL(name=''){
+        const url=new URL(window.location.href+'overlay.html')
+        const searchParams=url.searchParams
+        const obsurl=document.querySelector('#url')
+        const obspassword=document.querySelector('#password')
+        searchParams.set('name',name)
+        searchParams.set('obsurl',obsurl.value)
+        searchParams.set('obspassword',obspassword.value)
+        return url.href
+    }
+
+    async function setURL(name,currentURL=getOverlayURL()){
+        const url=new URL(currentURL)
+        const searchParams=url.searchParams
+        const obsurl=document.querySelector('#url')
+        const obspassword=document.querySelector('#password')
+        if(searchParams.get('name')!=name){
+            searchParams.set('name',name)
+        }
+        if(searchParams.get('obsurl')!=obsurl.value){
+            searchParams.set('obsurl',obsurl.value)
+        }
+        if(searchParams.get('obspassword')!=obspassword.value){
+            searchParams.set('obspassword',obspassword.value)
+        }
+        if(currentURL!=url.href){
+            console.log('updating url for '+name)
+            obs.call('SetInputSettings',{
+                inputName:name,
+                inputSettings:{url:url.href}
+            })
+        }
+    }
+
+    function addLegacy(name){
+        console.info('adding upgrade prompt for '+name)
+        const upgradePrompt=document.querySelector('#upgradePrompt').cloneNode(true)
+        upgradePrompt.hidden=false
+        upgradePrompt.querySelector('#name').innerHTML=name
+        upgradePrompt.id=name
+        document.querySelector('#upgrades').appendChild(upgradePrompt)
+    }
+
+    function addSettings(name){
+        console.info('adding settings for '+name)
+        const settings=document.querySelector('#settings').cloneNode(true)
+        settings.hidden=false
+        settings.querySelector('#name').innerHTML=name
+        settings.id=name
+        document.querySelector('#inputSettings').appendChild(settings)
+    }
+
+    function upgrade(name){
+        document.querySelector('#'+name).remove()
+        setURL(name)
+        addSettings(name)
+    }
+
+    function remove(name){
+        const input={inputName:name}
+        obs.call('RemoveInput',input).then(()=>onInputRemoved(input))
+    }
+
+    function addNew(){
+        const scene=document.querySelector('#scene').value
+        const name=document.querySelector('#newName').value
+        obs.call('CreateInput',{
+            sceneName:scene,
+            inputName:name,
+            inputKind:'browser_source',
+            inputSettings:{
+                url:getOverlayURL(name)
+            }
+        }).catch(function onCreateInputError(error){
+            document.querySelector('#status').innerHTML='Adding PNGTube failed: Error '+error.code+': '+error.message
+        })
+    }
+
+    function checkInput(input){
+        if(input.inputKind!='browser_source'){
+            return
+        }
+        if('url' in input.inputSettings === false){
+            return
+        }
+        if(input.inputSettings.url.startsWith(window.location.href)){
+            setURL(input.inputName,input.inputSettings.url)
+            addSettings(input.inputName)
+            return
+        }
+        if(input.inputSettings.url.startsWith('https://sugoidogo.github.io/pngtube')){
+            addLegacy(input.inputName)
+        }
+    }
+
+    function genericError(error,prefix=''){
+        console.log(error)
+        document.querySelector('#status').innerHTML=prefix+'Error '+error.code+': '+error.message
+    }
+
+    function onInputRemoved(input){
+        console.info('input removed',input)
+        document.querySelector('#'+input.inputName).remove()
+    }
+
+</script>
