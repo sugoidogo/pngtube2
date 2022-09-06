@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<script 
+    src="https://cdn.jsdelivr.net/npm/obs-websocket-js@5.0.1/dist/obs-ws.min.js" 
+    integrity="sha256-UbkntZrYTokZf8tldcF9nmOn5CNgcmDP+MNsUcKUpEE=" 
+    crossorigin="anonymous">
+</script>
+<script>
+    const obs=new OBSWebSocket()
+    const params=new URLSearchParams(window.location.search)
+    const obsurl=params.get('obsurl')
+    const obspassword=params.get('obspassword')
+    const name=params.get('name')
+    const inputs=[]
+    let backoff=false
+
+    function backoffStart(){
+        backoff=true
+    }
+
+    function backoffEnd(){
+        backoff=false
+    }
+
+    window.ontransitionstart=backoffStart
+    window.ontransitionend=backoffEnd
+    window.ontransitioncancel=backoffEnd
+    window.onanimationstart=backoffStart
+    window.onanimationend=backoffEnd
+    window.ontransitioncancel=backoffEnd
+
+    obs.addListener('Identified',function onIdentified(){
+        obs.call('GetPersistentData',{
+            realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+            slotName:'pngtubev6'+name
+        }).then(function onGetPersistentData(data){
+            data=data.slotValue
+            console.log(data)
+            const style=document.createElement('style')
+            style.innerHTML=data.css
+            const body=document.querySelector('body')
+            body.appendChild(style)
+            for(const [id,image] of Object.entries(data.image)){
+                const img=document.createElement('img')
+                img.id=id
+                img.src=image
+                body.appendChild(img)
+            }
+            for(const input of data.source){
+                inputs.push(input)
+            }
+            obs.on('InputVolumeMeters',function onInputVolumeMeters(data){
+                if(backoff){
+                    return
+                }
+                function isAudioActive(){
+                    for(const input of data.inputs){
+                        if(inputs.includes(input.inputName)){
+                            for(const channel of input.inputLevelsMul){
+                                for(const value of channel){
+                                    if(value!=0){
+                                        return true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return false
+                }
+                const active=isAudioActive()
+                for(const img of document.querySelectorAll('img')){
+                    if(active){
+                        img.classList.add('active')
+                    }else{
+                        img.classList.remove('active')
+                    }
+                }
+            })
+        })
+    })
+
+    obs.addListener('InputNameChanged',function onInputNameChanged(input){
+        console.log(input)
+        obs.call('GetPersistentData',{
+            realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+            slotName:'pngtubev6'+input.oldInputName
+        }).then(function(data){
+            obs.call('SetPersistentData',{
+                realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+                slotName:'pngtubev6'+input.oldInputName,
+                slotValue:{
+                    image:{},
+                    source:[],
+                    css:''
+                }
+            })
+            obs.call('SetPersistentData',{
+                realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+                slotName:'pngtubev6'+input.inputName,
+                slotValue:data.slotValue
+            }).then(function(){
+                const url=new URL(window.location.href)
+                const searchParams=url.searchParams
+                searchParams.set('name',input.inputName)
+                obs.call('SetInputSettings',{
+                    inputName:input.inputName,
+                    inputSettings:{url:url.href}
+                })
+            })
+        })
+    })
+
+    obs.connect(obsurl,obspassword,{eventSubscriptions:(1 << 16)+(1 << 3)})
+</script>

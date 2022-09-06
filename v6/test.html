@@ -1,0 +1,14 @@
+<img id="active" src="https://toppng.com/uploads/preview/user-talking-with-speech-bubble-vector-person-talking-icon-transparent-11563236791ssdyi9s7b6.png">
+<img id="idle" src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Person_icon_BLACK-01.svg/800px-Person_icon_BLACK-01.svg.png">
+<script>
+    const csslink=new URLSearchParams(window.location.search).get('css')
+    const css=document.createElement('link')
+    css.rel='stylesheet'
+    css.href=csslink
+    document.head.appendChild(css)
+    window.onclick=async function(){
+        for(const img of document.querySelectorAll('img')){
+            img.classList.toggle('active')
+        }
+    }
+</script>

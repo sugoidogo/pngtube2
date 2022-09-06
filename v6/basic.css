@@ -1,0 +1,17 @@
+@import url('center.css');
+
+#active {
+    opacity: 0;
+}
+
+#idle {
+    opacity: 1;
+}
+
+#active.active{
+    opacity: 1;
+}
+
+#idle.active{
+    opacity: 0;
+}

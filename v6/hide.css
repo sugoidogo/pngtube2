@@ -1,0 +1,11 @@
+@import url('center.css');
+
+img {
+    bottom:-100%;
+    transition-property: bottom;
+    transition-duration: 0.5s;
+}
+
+img.active{
+    bottom:0%
+}

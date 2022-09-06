@@ -1,0 +1,26 @@
+@import url('basic.css');
+
+img {
+    --bounce-height: 5vh;
+    height: calc(100vh - var(--bounce-height));
+}
+
+.active {
+    animation: bounce 0.5s;
+}
+
+@keyframes bounce {
+    0% {
+        bottom: 0vh;
+        animation-timing-function: ease-out;
+    }
+
+    50% {
+        bottom: var(--bounce-height);
+        animation-timing-function: ease-in;
+    }
+
+    100% {
+        bottom: 0vh;
+    }
+}

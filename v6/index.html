@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<body>
+    <div id="status">Loading...</div>
+    <span id="connectionSettings" hidden>
+        <table>
+            <tr>
+                <td>Websocket URL:</td>
+                <td><input id="url" type="url"></td>
+            </tr>
+            <tr>
+                <td>Websocket Password:</td>
+                <td><input id="password" type="password"></td>
+            </tr>
+        </table>
+        <button id="connect" onclick="connect()">Connect</button>
+        <button id="useQR" onclick="useQrCode()">Use QR Code</button>
+        <br>
+        <span id="qr" hidden>
+            <video id="qrvideo" hidden></video>
+            <br>
+            <span>Make sure this device and the one running OBS are on the same network.</span>
+            <br>
+            <button onclick="screenCapture()">Capture from Screen</button>
+            <button onclick="cameraCapture()">Capture from Camera</button>
+            <br>
+        </span>
+    </span>
+    <span id="connected">
+        <div id="upgradePrompt" class="bordered" hidden>
+            <span id="name"></span>
+            <span> is using another version of PNGTube. Switch to this version?</span>
+            <button onclick="upgrade(this.parentElement.id)">Switch</button>
+            <button onclick="remove(this.parentElement.id)">Remove</button>
+        </div>
+        <span id="upgrades"></span>
+        <div id="settings" class="bordered" hidden>
+            <div id="name"></div>
+            <table>
+                <tr>
+                    <td>Images</td>
+                    <td>
+                        <input type="file" accept="image/*" multiple onchange="addImage(this)">
+                        <ul id="images">
+                            <li hidden id="imageTemplate">
+                                <button onclick="this.parentElement.remove()">Remove</button>
+                                <span id="name"></span>
+                                <img hidden>
+                            </li>
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Audio Sources</td>
+                    <td>
+                        <select data-id="source"></select>
+                        <button onclick="addSource(this.parentElement)">Add</button>
+                        <ul>
+                            <li hidden>
+                                <button onclick="this.parentElement.remove()">Remove</button>
+                                <button onclick="addGate(this.parentElement)" hidden id="noiseGate">Add Noise Gate</button>
+                                <label data-id="source"></label>
+                            </li>
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <td>CSS</td>
+                    <td>
+                        <input id="css" type="file" accept="text/css" onchange="addCSS('#name')">
+                    </td>
+                </tr>
+            </table>
+            <button onclick="save(this.parentElement.id)">Save and Apply</button>
+            <button onclick="remove(this.parentElement.id)">Remove</button>
+        </div>
+        <span id="inputSettings"></span>
+        <span id="newInput">
+            <table>
+                <tr>
+                    <td>Scene:</td>
+                    <td><select id="scene"></select></td>
+                </tr>
+                <tr>
+                    <td>Name:</td>
+                    <td><input type="text" id="newName"></td>
+                </tr>
+            </table>
+            <button onclick="addNew()">Add new PNGTube</button>
+        </span>
+    </span>
+</body>
+<style>
+    .bordered {
+        border: 1px solid black;
+    }
+    video {
+        max-width: 100vw;
+        max-height: 50vh;
+    }
+</style>
+<script 
+    src="https://cdn.jsdelivr.net/npm/obs-websocket-js@5.0.1/dist/obs-ws.min.js" 
+    integrity="sha256-UbkntZrYTokZf8tldcF9nmOn5CNgcmDP+MNsUcKUpEE=" 
+    crossorigin="anonymous">
+</script>
+<script 
+    src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.1/qr-scanner.umd.min.js" 
+    integrity="sha256-jstRoCLjzwXwLN2o0DMkkwRHtqYCQMxrRkktAHwZekU=" 
+    crossorigin="anonymous"></script>
+<script>
+    'use strict'
+
+    console.info('loading settings or defaults')
+    document.querySelector('#url').value=localStorage.getItem('url') || 'ws://localhost:4455'
+    document.querySelector('#password').value=localStorage.getItem('password') || ''
+
+    console.info('initializing obs-websocket-js')
+    const obs = new OBSWebSocket()
+    obs.addListener('ConnectionClosed',function onConnectionClosed(error){
+        document.querySelector('#connected').hidden=true
+        document.querySelector('#connectionSettings').hidden=false
+        switch(error.code){
+            case 1006:
+                document.querySelector('#status').innerHTML='obs websocket not found.<br>'+
+                    'Is <a href="https://github.com/obsproject/obs-websocket/releases/latest">obs-websocket</a> installed?<br>'+
+                    'Is obs open? Check your websocket settings in OBS under the Tools menu.'
+                break
+            case 4009:
+                document.querySelector('#status').innerHTML=error.message.split(' ').slice(-3).join(' ').toLowerCase().replace('authentication','Password')+
+                    '<br>You can view or change your websocket password in OBS under the Tools menu.'
+                break
+            default:
+                document.querySelector('#status').innerHTML='connection closed: Error '+error.code+': '+error.message
+                break
+        }
+        console.warn('connection closed', error.code, error.message)
+        document.querySelector('#upgrades').innerHTML=''
+        document.querySelector('#inputSettings').innerHTML=''
+        document.querySelector('select').innerHTML=''
+    })
+    obs.addListener('ConnectionOpened',function onConnectionOpened(){
+        console.info('connected to socket, saving url')
+        localStorage.setItem('url',document.querySelector('#url').value)
+        document.querySelector('#connectionSettings').hidden=true
+    })
+    obs.addListener('Identified',async function onIdentified(){
+        console.info('authentication passed, saving password')
+        localStorage.setItem('password',document.querySelector('#password').value)
+        const video=document.querySelector('#qrvideo')
+        if(video.srcObject!=null){
+            video.srcObject.getTracks().forEach(function stopCapture(track){
+                track.stop()
+            })
+            video.srcObject=null
+        }
+        document.querySelector('#status').innerHTML='Loading OBS data...'
+        const loadingPromises=[]
+        console.info('getting input list')
+        loadingPromises.push(obs.call('GetInputList',{}).then(function onReceiveBrowserInputList(response){
+            console.info('got input list:',response)
+            const inputPromises=[]
+            console.info('getting input settings')
+            for(const input of response.inputs){
+                inputPromises.push(obs.call('GetInputSettings',{inputName:input.inputName}).then(function onReceiveBrowserInputSettings(response){
+                    Object.assign(input,response)
+                    checkInput(input)
+                    return input
+                }).catch(function onParseError(error){
+                    console.error(input.inputName,error)
+                }))
+            }
+            loadingPromises.push(Promise.all(inputPromises).then(function onBrowserInputsFiltered(data){
+                console.info('got input settings:',data)
+            }))
+        }))
+        console.info('getting scene list')
+        loadingPromises.push(obs.call('GetSceneList',{}).then(function onReceiveSceneList(response){
+            console.info('got scene list:',response)
+            const scenes=document.querySelector('#scene')
+            for(const scene of response.scenes){
+                const option=document.createElement('option')
+                option.value=scene.sceneName
+                option.innerHTML=scene.sceneName
+                scenes.appendChild(option)
+            }
+        }))
+        while(loadingPromises.length!=0){
+            await loadingPromises.shift()
+        }
+        console.info('loading finished')
+        document.querySelector('#status').innerHTML='Ready'
+        document.querySelector('#connected').hidden=false
+    })
+    obs.addListener('InputCreated',checkInput)
+    obs.addListener('InputRemoved',onInputRemoved)
+    obs.addListener('InputNameChanged',function onInputNameChanged(input){
+        console.info('input name changed',input)
+        const element=document.querySelector('#'+input.oldInputName)
+        element.id=input.inputName
+        element.querySelector('#name').innerHTML=input.inputName
+    })
+
+    console.info('connecting to obs')
+    connect()
+
+    function log(...data){
+        console.log(data)
+    }
+
+    async function connect(){
+        document.querySelector('#status').innerHTML='Connecting to OBS...'
+        try{
+            await obs.connect(
+                document.querySelector('#url').value,
+                document.querySelector('#password').value
+            )
+        }catch(e){
+            return false
+        }
+        return true
+    }
+
+    function useQrCode(){
+        document.querySelector('#qr').hidden=false
+    }
+
+    let interval
+
+    function startQr(videoSource){
+        const video=document.querySelector('#qrvideo')
+        video.srcObject=videoSource
+        video.play()
+        video.hidden=false
+        interval=setInterval(qrScan,1000)
+    }
+
+    async function screenCapture(){
+        const mediaSource=await navigator.mediaDevices.getDisplayMedia()
+        startQr(mediaSource)
+    }
+
+    async function cameraCapture(){
+        const videoSource=await navigator.mediaDevices.getUserMedia({video:true})
+        startQr(videoSource)
+    }
+
+    function qrScan(){
+        const video=document.querySelector('#qrvideo')
+        QrScanner.scanImage(video,{returnDetailedScanResult:true})
+            .then(onQrScan).catch(function(error){console.warn(error)})
+    }
+
+    async function onQrScan(result){
+        var data=result.data.split('/')
+        if(data.shift()!='obsws:'){
+            return false
+        }
+        clearInterval(interval)
+        data.shift()
+        const fullurl='ws://'+data.shift()
+        const port=fullurl.split(':').pop()
+        const localurl='ws://localhost:'+port
+        const password=data.shift()
+        const obsurl=document.querySelector('#url')
+        const obspassword=document.querySelector('#password')
+        obspassword.value=password
+        obsurl.value=localurl
+        if(await connect()){
+            return true
+        }
+        obsurl.value=fullurl
+        if(await connect()){
+            return true
+        }
+        interval=setInterval(qrScan,1000)
+        return false
+    }
+
+    function getOverlayURL(name=''){
+        const url=new URL(window.location.href+'overlay.html')
+        const searchParams=url.searchParams
+        const obsurl=document.querySelector('#url')
+        const obspassword=document.querySelector('#password')
+        searchParams.set('name',name)
+        searchParams.set('obsurl',obsurl.value)
+        if(obspassword.value){
+            searchParams.set('obspassword',obspassword.value)
+        }
+        return url.href
+    }
+
+    async function setURL(name,currentURL=getOverlayURL()){
+        const url=new URL(currentURL)
+        const searchParams=url.searchParams
+        const obsurl=document.querySelector('#url')
+        const obspassword=document.querySelector('#password')
+        if(searchParams.get('name')!=name){
+            searchParams.set('name',name)
+        }
+        if(searchParams.get('obsurl')!=obsurl.value){
+            searchParams.set('obsurl',obsurl.value)
+        }
+        if(searchParams.get('obspassword')!=obspassword.value){
+            searchParams.set('obspassword',obspassword.value)
+        }
+        if(currentURL!=url.href){
+            console.log('updating url for '+name)
+            obs.call('SetInputSettings',{
+                inputName:name,
+                inputSettings:{url:url.href}
+            })
+        }
+    }
+
+    function addLegacy(name){
+        console.info('adding upgrade prompt for '+name)
+        const upgradePrompt=document.querySelector('#upgradePrompt').cloneNode(true)
+        upgradePrompt.hidden=false
+        upgradePrompt.querySelector('#name').innerHTML=name
+        upgradePrompt.id=name
+        document.querySelector('#upgrades').appendChild(upgradePrompt)
+    }
+
+    const allSettings={}
+
+    function addSettings(name){
+        console.info('getting settings for',name)
+        const settings=document.querySelector('#settings').cloneNode(true)
+        settings.hidden=false
+        settings.querySelector('#name').innerHTML=name
+        settings.id=name
+        const css=settings.querySelector('#css')
+        css.outerHTML=css.outerHTML.replace('#name',name)
+        obs.call('GetPersistentData',{
+            realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+            slotName:'pngtubev6'+name
+        }).then(function(data){
+            data=data.slotValue
+            console.log('got settings for',name,data)
+            if(data==null){
+                data={
+                    image:{},
+                    source:[],
+                    css:''
+                }
+            }
+            allSettings[name]=data
+            for(const source of data.source){
+                addSource(settings,source)
+            }
+        })
+        document.querySelector('#inputSettings').appendChild(settings)
+    }
+
+    function upgrade(name){
+        document.querySelector('#'+name).remove()
+        setURL(name)
+        addSettings(name)
+    }
+
+    function remove(name){
+        const input={inputName:name}
+        obs.call('RemoveInput',input).then(()=>onInputRemoved(input))
+    }
+
+    function addNew(){
+        const scene=document.querySelector('#scene').value
+        const name=document.querySelector('#newName').value
+        obs.call('CreateInput',{
+            sceneName:scene,
+            inputName:name,
+            inputKind:'browser_source',
+            inputSettings:{
+                url:getOverlayURL(name)
+            }
+        }).catch(function onCreateInputError(error){
+            document.querySelector('#status').innerHTML='Adding PNGTube failed: Error '+error.code+': '+error.message
+        })
+    }
+
+    function checkInput(input){
+        const option=document.createElement('option')
+        option.value=input.inputName
+        option.innerHTML=input.inputName
+        for(const select of document.querySelectorAll('select[data-id=source]')){
+            select.appendChild(option)
+        }
+        if(input.inputKind!='browser_source'){
+            return
+        }
+        if('url' in input.inputSettings === false){
+            return
+        }
+        if(input.inputSettings.url.startsWith(window.location.href)){
+            setURL(input.inputName,input.inputSettings.url)
+            addSettings(input.inputName)
+            return
+        }
+        if(input.inputSettings.url.startsWith('https://sugoidogo.github.io/pngtube')){
+            addLegacy(input.inputName)
+        }
+        if(input.inputSettings.url.startsWith(window.location.href.split('/').slice(0,-2).join('/'))){
+            addLegacy(input.inputName)
+        }
+    }
+
+    function genericError(error,prefix=''){
+        console.log(error)
+        document.querySelector('#status').innerHTML=prefix+'Error '+error.code+': '+error.message
+    }
+
+    function onInputRemoved(input){
+        console.info('input removed',input)
+        document.querySelector('#'+input.inputName).remove()
+        for(const option of document.querySelectorAll('option[value='+input.inputName+']')){
+            option.remove()
+        }
+        obs.call('SetPersistentData',{
+            realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+            slotName:'pngtubev5'+input.inputName,
+            slotValue:{}
+        })
+    }
+
+    function save(name){
+        const settings=document.querySelector('#'+name)
+        const data=allSettings[name]
+        const sources=[]
+        for(const source of settings.querySelectorAll('label[data-id=source]')){
+            if(source.innerHTML){
+                sources.push(source.innerHTML)
+            }
+        }
+        if(sources.length!=0){
+            data.source=sources
+        }
+        const images={}
+        for(const image of settings.querySelectorAll('#imageTemplate')){
+            const img=image.querySelector('img')
+            console.log(img)
+            if(img.src){
+                const name=image.querySelector('#name')
+                console.log(name.innerHTML)
+                images[name.innerHTML]=img.src
+            }
+        }
+        if(Object.keys(images).length>0){
+            data.image=images
+        }
+        console.log('saving data:',data)
+        obs.call('SetPersistentData',{
+            realm:'OBS_WEBSOCKET_DATA_REALM_GLOBAL',
+            slotName:'pngtubev6'+name,
+            slotValue:data
+        })
+        let width=0
+        let height=0
+        let imagePromises=[]
+        for(const [name,source] of Object.entries(data.image)){
+            imagePromises.push(new Promise(function(resolve){
+                const image=new Image();
+                image.onload=function(){
+                    if(image.naturalWidth>width){
+                        width=image.naturalWidth
+                    }
+                    if(image.naturalHeight>height){
+                        height=image.naturalHeight
+                    }
+                    resolve()
+                }
+                image.src=source
+            }))
+        }
+        Promise.all(imagePromises).then(function(){
+            obs.call('SetInputSettings',{
+                inputName:name,
+                inputSettings:{url:''}
+            }).then(function(){
+                obs.call('SetInputSettings',{
+                    inputName:name,
+                    inputSettings:{
+                        url:getOverlayURL(name),
+                        width:width,
+                        height:height
+                    }
+                })
+            })
+        })
+    }
+
+    function addSource(parentElement,value=null){
+        if(value==null){
+            value=parentElement.querySelector('select').value
+        }
+        const listItem=parentElement.querySelector('li').cloneNode(true)
+        listItem.hidden=false
+        listItem.querySelector('label').innerHTML=value
+        parentElement.querySelector('ul').appendChild(listItem)
+        obs.call('GetSourceFilterList',{
+            sourceName:value
+        }).then(function(data){
+            for(const filter of data.filters){
+                if(filter.filterKind=='noise_gate_filter'){
+                    return
+                }
+            }
+            listItem.querySelector('#noiseGate').hidden=false
+        })
+    }
+
+    function addGate(parentElement){
+        const name=parentElement.querySelector('label').innerHTML
+        obs.call('CreateSourceFilter',{
+            sourceName:name,
+            filterName:'Noise Gate',
+            filterKind:'noise_gate_filter',
+            filterSettings:{
+                attack_time:25,
+                release_time:50,
+                close_threshold:-60,
+                open_threshold:-55
+            }
+        }).then(function(){
+            parentElement.querySelector('#noiseGate').hidden=true
+            obs.call('OpenInputFiltersDialog',{inputName:name})
+        })
+    }
+
+    function addImage(filePicker){
+        for(const file of filePicker.files){
+            const listItem=document.querySelector('#imageTemplate').cloneNode(true)
+            listItem.hidden=false
+            listItem.querySelector('#name').textContent=file.name.split('.').shift()
+            const fileReader=new FileReader()
+            fileReader.onload=function(){
+                listItem.querySelector('img').src=fileReader.result
+                filePicker.parentElement.querySelector('#images').appendChild(listItem)
+            }
+            fileReader.readAsDataURL(file)
+        }
+    }
+
+    function addCSS(name){
+        const fileReader=new FileReader()
+        fileReader.onload=function(){
+            allSettings[name].css=fileReader.result
+        }
+        fileReader.readAsText(document.querySelector('#'+name).querySelector('#css').files[0])
+    }
+</script>
