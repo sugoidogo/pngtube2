@@ -1,8 +1,9 @@
 @import url('basic.css');
 
 img {
-    --bounce-height: 5vh;
-    height: calc(100vh - var(--bounce-height));
+    --bounce-height: 5%;
+    height: calc(100% - var(--bounce-height));
+    bottom: 0%;
 }
 
 .active {
@@ -11,7 +12,7 @@ img {
 
 @keyframes bounce {
     0% {
-        bottom: 0vh;
+        bottom: 0%;
         animation-timing-function: ease-out;
     }
 
@@ -21,6 +22,6 @@ img {
     }
 
     100% {
-        bottom: 0vh;
+        bottom: 0%;
     }
 }
