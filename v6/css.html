@@ -1,15 +1,24 @@
 <!DOCTYPE html>
 <div>In this repo there are a few basic css files you can use as starting points.</div>
+<div>PNGTube uses the name of each image for its id (the # items in css) and applies the 'active' class (the . items in css) when audio is detected.</div>
+<div>You can replicate this behavior in the test links by clicking on the window to toggle the active class.</div>
 <a href="basic.css" download>basic.css</a>
 <a href="test.html?css=basic.css" target="_blank">test</a>
-<span>This file requires your images be named 'active' and 'idle'</span>
+<span>All other files are based on this one, which changes the opacity of the 'active' and 'idle' images based on voice activity</span>
 <br>
-<a href="bounce.css" doanload>bounce.css</a>
+<a href="brightness.css" download>brightness.css</a>
+<a href="test.html?css=brightness.css" target="_blank">test</a>
+<span>This file lowers the brightness of the idle image</span>
+<br>
+<a href="bounce.css" download>bounce.css</a>
 <a href="test.html?css=bounce.css" target="_blank">test</a>
-<span>This file requires your images be named 'active' and 'idle'</span>
+<span>This file adds a bounce animation when speaking starts</span>
+<br>
+<a href="reactive.css" download>reactive.ss</a>
+<a href="test.html?css=reactive.css" target="_blank">test</a>
+<span>This file simply combines the brightness and bounce files to replicate the <a href="https://reactive.fugi.tech/" target="_blank">Reactive by FugiTech</a> style.</span>
 <br>
 <a href="hide.css" doanload>hide.css</a>
 <a href="test.html?css=hide.css" target="_blank">test</a>
-<span>This file is designed for one image with any name</span>
+<span>This file hides all images below the viewport during silence</span>
 <br>
-<span>PNGTube uses the name of each image for its id (the # items in css) and applies the 'active' class (the . items in css) when audio is detected.</span>
