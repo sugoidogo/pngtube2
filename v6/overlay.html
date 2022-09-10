@@ -13,7 +13,10 @@
     const inputs=[]
     let backoff=false
 
-    function backoffStart(){
+    function backoffStart(event){
+        if(event instanceof AnimationEvent && getComputedStyle(event.target,event.pseudoElement).animationIterationCount=='infinite'){
+            return
+        }
         backoff=true
     }
 
