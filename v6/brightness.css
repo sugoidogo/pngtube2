@@ -1,0 +1,5 @@
+@import url('basic.css');
+
+#idle {
+    filter: brightness(50%);
+}
