@@ -1,4 +1,16 @@
-@import url('center.css');
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+img {
+    position: absolute;
+    bottom: 0%;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
 
 #active {
     opacity: 0;
