@@ -9,6 +9,5 @@ OBS Browser Source for creating an image based avatar that animates to audio inp
 2. Visit the [PNGTube Setup Page](https://sugoidogo.github.io/pngtube2/v6/), which will walk you through the rest.
     - If you don't know what to use for the CSS file, check out the [samples](https://sugoidogo.github.io/pngtube2/v6/css)
 ## Support
-[Get support on Discord](https://discord.gg/zxDnYSvMNw)
-
-[Give support on Patreon](https://www.patreon.com/SugoiDogo)
+- Get support via [Discord](https://discord.gg/zxDnYSvMNw)
+- Give support via [PayPal](https://paypal.me/SugoiDogo)
