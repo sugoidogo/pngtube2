@@ -49,7 +49,7 @@
                         </ul>
                     </td>
                 </tr>
-                <tr>
+                <tr id="sources">
                     <td>Audio Sources</td>
                     <td>
                         <select data-id="source"></select>
@@ -346,7 +346,7 @@
             }
             allSettings[name]=data
             for(const source of data.source){
-                addSource(settings,source)
+                addSource(settings.querySelector('#sources'),source)
             }
         })
         document.querySelector('#inputSettings').appendChild(settings)
