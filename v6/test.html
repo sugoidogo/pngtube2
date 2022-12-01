@@ -1,5 +1,7 @@
-<img id="active" src="https://toppng.com/uploads/preview/user-talking-with-speech-bubble-vector-person-talking-icon-transparent-11563236791ssdyi9s7b6.png">
-<img id="idle" src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Person_icon_BLACK-01.svg/800px-Person_icon_BLACK-01.svg.png">
+<img id="active" src="../tubie/active.png">
+<img id="active-blink" src="../tubie/active-blink.png">
+<img id="idle" src="../tubie/idle.png">
+<img id="idle-blink" src="../tubie/idle-blink.png">
 <script>
     const csslink=new URLSearchParams(window.location.search).get('css')
     const css=document.createElement('link')
@@ -45,4 +47,5 @@
     window.onanimationend=backoffEnd
     window.ontransitioncancel=backoffEnd
 
+    import('./blink.js')
 </script>

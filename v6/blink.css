@@ -1,0 +1,19 @@
+@import url('basic.css');
+
+body {
+    --blink-min: 1;
+    --blink-max: 10;
+    --blink-time: 0.1;
+}
+
+#active-blink,
+#idle-blink,
+#active.blink,
+#idle.blink {
+    opacity: 0;
+}
+
+#active-blink.blink.active,
+#idle-blink.blink:not(.active) {
+    opacity: 1;
+}
