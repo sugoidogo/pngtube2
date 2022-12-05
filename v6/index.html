@@ -114,6 +114,8 @@
     document.querySelector('#url').value=localStorage.getItem('url') || 'ws://localhost:4455'
     document.querySelector('#password').value=localStorage.getItem('password') || ''
 
+    let browser_source
+
     console.info('initializing obs-websocket-js')
     const obs = new OBSWebSocket()
     obs.addListener('ConnectionClosed',function onConnectionClosed(error){
@@ -155,24 +157,6 @@
         }
         document.querySelector('#status').innerHTML='Loading OBS data...'
         const loadingPromises=[]
-        console.info('getting input list')
-        loadingPromises.push(obs.call('GetInputList',{}).then(function onReceiveBrowserInputList(response){
-            console.info('got input list:',response)
-            const inputPromises=[]
-            console.info('getting input settings')
-            for(const input of response.inputs){
-                inputPromises.push(obs.call('GetInputSettings',{inputName:input.inputName}).then(function onReceiveBrowserInputSettings(response){
-                    Object.assign(input,response)
-                    checkInput(input)
-                    return input
-                }).catch(function onParseError(error){
-                    console.error(input.inputName,error)
-                }))
-            }
-            loadingPromises.push(Promise.all(inputPromises).then(function onBrowserInputsFiltered(data){
-                console.info('got input settings:',data)
-            }))
-        }))
         console.info('getting scene list')
         loadingPromises.push(obs.call('GetSceneList',{}).then(function onReceiveSceneList(response){
             console.info('got scene list:',response)
@@ -183,6 +167,37 @@
                 option.innerHTML=scene.sceneName
                 scenes.appendChild(option)
             }
+        }))
+        console.info('getting browser source type name')
+        loadingPromises.push(obs.call('GetInputKindList',{unversioned:true}).then(function onGetInputKindList(response){
+            for(const name of response.inputKinds){
+                if(name.includes('browser')){
+                    browser_source=name
+                    console.debug('browser_source='+name)
+                    return true
+                }
+            }
+            console.warn('browser source type not found, defaulting to browser_source')
+            browser_source='browser_source'
+        }).then(()=>{
+            console.info('getting input list')
+            obs.call('GetInputList',{}).then(function onReceiveBrowserInputList(response){
+                console.info('got input list:',response)
+                const inputPromises=[]
+                console.info('getting input settings')
+                for(const input of response.inputs){
+                    inputPromises.push(obs.call('GetInputSettings',{inputName:input.inputName}).then(function onReceiveBrowserInputSettings(response){
+                        Object.assign(input,response)
+                        checkInput(input)
+                        return input
+                    }).catch(function onParseError(error){
+                        console.error(input.inputName,error)
+                    }))
+                }
+                loadingPromises.push(Promise.all(inputPromises).then(function onBrowserInputsFiltered(data){
+                    console.info('got input settings:',data)
+                }))
+            })
         }))
         while(loadingPromises.length!=0){
             await loadingPromises.shift()
@@ -277,7 +292,8 @@
     }
 
     function getOverlayURL(name=''){
-        const url=new URL(window.location.href+'overlay.html')
+        const length=window.location.href.lastIndexOf('/')
+        const url=new URL(window.location.href.substring(0,length+1)+'overlay.html')
         const searchParams=url.searchParams
         const obsurl=document.querySelector('#url')
         const obspassword=document.querySelector('#password')
@@ -369,7 +385,7 @@
         obs.call('CreateInput',{
             sceneName:scene,
             inputName:name,
-            inputKind:'browser_source',
+            inputKind:browser_source,
             inputSettings:{
                 url:getOverlayURL(name)
             }
@@ -385,7 +401,7 @@
         for(const select of document.querySelectorAll('select[data-id=source]')){
             select.appendChild(option)
         }
-        if(input.inputKind!='browser_source'){
+        if(input.inputKind!=browser_source){
             return
         }
         if('url' in input.inputSettings === false){
