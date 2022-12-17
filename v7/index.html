@@ -1,0 +1,459 @@
+<h1>PNGTube</h1>
+<div id="status">Loading...</div>
+<select id="instance" hidden></select>
+<form name="new_instance" hidden>
+    <input type="text" name="instance_name" required>
+    <button type="submit">Create new instance</button>
+</form>
+<form name="instance_config" hidden>
+    <button type="button" id="remove_instance">Delete</button>
+    <br>
+    <table>
+        <tr>
+            <td>
+                <h2>Assets</h2>
+                <div id="asset_warning" hidden>
+                    Possible missing assets:
+                    <ul id="missing_assets"></ul>
+                    Make sure all your assets have been added,
+                    <br>
+                    and their id's are set correctly below.
+                    <br>
+                    If you have already done so, ignore this warning.
+                    <br><br>
+                </div>
+                <input type="file" id="asset_file_input" multiple>
+                <ul id="asset_list"></ul>
+            </td>
+            <td>
+                <h2>Activation</h2>
+                <div id="obs_config">
+                    <span id="obs_status">Connecting to OBS...</span>
+                    <input type="hidden" name="obs_token">
+                    <button type="button" id="obs_auth">Get OBS Authorization</button>
+                </div>
+                <br>
+                <button type="button" id="add_source">Add Source</button>
+                <ul id="source_list"></ul>
+            </td>
+            <td id="instructions">
+                <h3>Adjusting Sensitivity</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <td colspan="2">Noise Gate Settings</td>
+                        </tr>
+                    </thead>
+                    <tr>
+                        <td>Close Threshold</td>
+                        <td>Idle volume level</td>
+                    </tr>
+                    <tr>
+                        <td>Open Threshold</td>
+                        <td>Active volume level</td>
+                    </tr>
+                    <tr>
+                        <td>Hold Time</td>
+                        <td>How long to hold before switching back to idle</td>
+                    </tr>
+                </table>
+                <br>
+                PNGTube will consider your audio sources 'active'
+                if there is any sound coming through at all.
+                The volume meters in OBS won't show sounds quieter than -60db,
+                so even if you think it's silent,
+                most audio devices have some static noise in them.
+                The "Adjust Sensitivity" button on the left will open the filter panel,
+                and add a noise gate if you don't have one already.
+            </td>
+        </tr>
+    </table>
+    <button type="submit">Save & Copy URL</button>
+</form>
+
+<datalist id="element_references"></datalist>
+
+<datalist id="obs_sources"></datalist>
+
+<span id="templates" hidden>
+    <li class="asset">
+        <form name="assets">
+            <button type="button" onclick="this.parentElement.parentElement.remove()">remove</button>
+            <input type="search" name="id" required pattern="[\w-]+" list="element_references">
+            <span id="filename"></span>
+            <input type="hidden" name="url">
+        </form>
+    </li>
+    <li class="source">
+        <button type="button" onclick="this.parentElement.remove()">remove</button>
+        <input type="search" name="sources" list="obs_sources" required pattern=".+">
+        <br>
+        <button type="button" class="sensitivity">Adjust Sensitivity</button>
+    </li>
+</span>
+
+<style>
+    * {
+        font-family: Inter, Roobert, Helvetica Neue, Helvetica, Arial, sans-serif;
+    }
+    form[name=new_instance]:not([hidden]),
+    form[name=instance_config]:not([hidden]){
+        display: inline;
+    }
+    td {
+        border: 1px solid lightgray;
+        vertical-align: top;
+        white-space: nowrap;
+        width: fit-content;
+    }
+    #instructions {
+        white-space: normal;
+        width: 20em;
+    }
+    input:invalid:required {
+        background-color: lightpink;
+    }
+    button#add_source,
+    button.sensitivity {
+        width: 100%;
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.js"
+    integrity="sha256-6fEA3uF0XCtisIcFZy5HTT58XocXY7LX7JUfEiK6W5Y=" 
+    crossorigin="anonymous">
+</script>
+<script src="https://cdn.jsdelivr.net/npm/obs-websocket-js@5.0.2/dist/obs-ws.js" 
+    integrity="sha256-WK517pkeDj2ugtVH+GZa/hQqIoNWNMcBk241/vo1mBw=" 
+    crossorigin="anonymous">
+</script>
+<script type="module">
+    import FileReaderAsync from '../js-util/FileReaderAsync.mjs'
+    import {getFormDataDeep} from '../js-util/FormDataDeep.mjs'
+    /** @type {Storage} */
+    const localStorage=localforage.createInstance({name:'pngtube.v7'})
+    const obs=new OBSWebSocket()
+    /** @type {HTMLDivElement} */
+    const status_div=document.querySelector('div#status')
+    /** @type {HTMLSelectElement} */
+    const instance_select=document.querySelector('select#instance')
+    /** @type {HTMLFormElement} */
+    const new_instance_form=document.querySelector('form[name=new_instance]')
+    /** @type {HTMLFormElement} */
+    const instance_config_form=document.querySelector('form[name=instance_config')
+    /** @type {HTMLInputElement} */
+    const tts_checkbox=document.querySelector('input[name=tts]')
+    /** @type {HTMLInputElement} */
+    const source_input=document.querySelector('input#sources')
+    /** @type {HTMLUListElement} */
+    const source_list=document.querySelector('ul#source_list')
+    /** @type {HTMLUListElement} */
+    const asset_list=document.querySelector('ul#asset_list')
+    /** @type {HTMLInputElement} */
+    const asset_file_input=document.querySelector('input#asset_file_input')
+    /** @type {HTMLSpanElement} */
+    const obs_status_span=document.querySelector('span#obs_status')
+    /** @type {HTMLInputElement} */
+    const obs_token_input=document.querySelector('input[name=obs_token]')
+    /** @type {HTMLDataListElement} */
+    const obs_sources_datalist=document.querySelector('datalist#obs_sources')
+    /** @type {HTMLSpanElement} */
+    const templates=document.querySelector('span#templates')
+    function set_loading(loading){
+        if(loading){
+            status_div.innerHTML='Loading...'
+            status_div.hidden=false
+            instance_select.hidden=true
+            new_instance_form.hidden=true
+            instance_config_form.hidden=true
+        }else{
+            instance_select.hidden=false
+            status_div.hidden=true
+        }
+    }
+    async function updateReferences(){
+        let refs=['idle','active']
+        for(const asset_list_item of asset_list.children){
+            const asset_url_input=asset_list_item.querySelector('input[name=url]')
+            const asset_dataurl=asset_url_input.value
+            if(asset_dataurl.startsWith('data:text')){
+                const asset_text=await fetch(asset_dataurl,{cache:'no-cache'}).then(response=>response.text())
+                const asset_references=asset_text.matchAll(/#[\w-]+/g)
+                for(const asset_reference of asset_references){
+                    refs.push(asset_reference[0].substring(1))
+                }
+            }
+        }
+        refs=[...new Set(refs)]
+        /** @type {HTMLDataListElement} */
+        const element_references_datalist=document.querySelector('datalist#element_references')
+        while(element_references_datalist.childElementCount>0){
+            element_references_datalist.firstElementChild.remove()
+        }
+        for(const ref of refs){
+            const option=document.createElement('option')
+            option.value=ref
+            element_references_datalist.appendChild(option)
+        }
+        for(const asset_list_item of asset_list.children){
+            const asset_id_input=asset_list_item.querySelector('input[name=id]')
+            const asset_id=asset_id_input.value
+            if(refs.includes(asset_id)){
+                refs.splice(refs.indexOf(asset_id),1)
+            }
+        }
+        const asset_warning_div=document.querySelector('div#asset_warning')
+        if(refs.length!=0){
+            const missing_assets_list=asset_warning_div.querySelector('ul#missing_assets')
+            while(missing_assets_list.childElementCount>0){
+                missing_assets_list.firstElementChild.remove()
+            }
+            for(const ref of refs){
+                const listItem=document.createElement('li')
+                listItem.innerHTML=ref
+                missing_assets_list.appendChild(listItem)
+            }
+            asset_warning_div.hidden=false
+        }else{
+            asset_warning_div.hidden=true
+        }
+    }
+    /**
+     * @param {File|String} source
+     * @param {String} id
+    */
+    async function add_asset(source,id=undefined){
+        const asset_list_item=templates.querySelector('li.asset').cloneNode(true)
+        const asset_id=asset_list_item.querySelector('input[name=id]')
+        const asset_file_name=asset_list_item.querySelector('span#filename')
+        const asset_url=asset_list_item.querySelector('input[name=url]')
+        const asset_remove_button=asset_list_item.querySelector('button')
+        asset_remove_button.addEventListener('click',updateReferences)
+        if(! (source instanceof File)){
+            let filename=null
+            if(!source.startsWith('data:')){
+                filename=source.split('/').at(-1)
+            }
+            source=await fetch(source,{cache:'no-cache'}).then(response=>response.blob())
+            if(!filename){
+                filename=id+'.'+source.type.split('/')[1]
+            }
+            source=new File([source],filename,{type:source.type})
+        }
+        asset_file_name.innerHTML=source.name
+        asset_url.value=await FileReaderAsync.readAs('DataURL',source)
+        if(id){
+            asset_id.value=id
+        }else{
+            asset_id.value=source.name.split('.')[0]
+        }
+        asset_id.oninput=updateReferences
+        asset_list.appendChild(asset_list_item)
+        updateReferences()
+    }
+    /** @param {HTMLInputElement} source_input */
+    async function adjust_sensitivity(source_input){
+        obs.call('GetSourceFilterList',{sourceName:source_input.value})
+        .then((response)=>{
+            for(const filter of response.filters){
+                if(filter.filterKind='noise_gate_filter'){
+                    obs.call('OpenInputFiltersDialog',{inputName:source_input.value})
+                    return
+                }
+            }
+            obs.call('CreateSourceFilter',{
+                sourceName:source_input.value,
+                filterName:'Noise Gate for PNGTube',
+                filterKind:'noise_gate_filter',
+                filterSettings:{
+                    close_threshold:-60,
+                    open_threshold:-30
+                }
+            }).then((response)=>{
+                obs.call('OpenInputFiltersDialog',{inputName:source_input.value})
+            })
+        })
+    }
+    async function add_source(name='Mic/Aux'){
+        const source_list_item=templates.querySelector('li.source').cloneNode(true)
+        const source_input=source_list_item.querySelector('input[name=sources]')
+        const source_sensitivity_button=source_list_item.querySelector('button.sensitivity')
+        source_input.value=name
+        source_sensitivity_button.onclick=()=>adjust_sensitivity(source_input)
+        source_list.appendChild(source_list_item)
+    }
+    document.querySelector('button#add_source').onclick=()=>add_source()
+    async function load_config(instance_name=instance_select.value){
+        set_loading(true)
+        obs.disconnect()
+
+        for(const list of [asset_list,source_list]){
+            while(list.childElementCount>0){
+                list.firstElementChild.remove()
+            }
+        }
+
+        if(instance_name==''){
+            set_loading(false)
+            new_instance_form.hidden=false
+            return false
+        }
+
+        const loading_promises=[]
+        const config=await localStorage.getItem(instance_name) || await fetch('default.json',{cache:'no-cache'}).then(response=>response.json())
+
+        console.debug(config)
+
+        if(config.obs_token){
+            obs_token_input.value=config.obs_token
+            obs_init()
+        }
+        if(config.assets){
+            if(! config.assets instanceof Array){
+                config.assets=[config.assets]
+            }
+            for(const asset of config.assets){
+                loading_promises.push(add_asset(asset.url,asset.id))
+            }
+        }
+        if(config.sources){
+            if(typeof config.sources=='string'){
+                config.sources=[config.sources]
+            }
+            for(const source of config.sources){
+                loading_promises.push(add_source(source))
+            }
+        }
+        return Promise.allSettled(loading_promises).then(()=>{
+            set_loading(false)
+            instance_config_form.hidden=false
+            return config
+        })
+    }
+    instance_select.onchange=()=>load_config()
+    async function instance_select_init(){
+        while(instance_select.childElementCount>0){
+            instance_select.firstElementChild.remove()
+        }
+        for(const instance_name of await localStorage.keys()){
+            const option=document.createElement('option')
+            option.value=instance_name
+            option.innerHTML=instance_name
+            instance_select.appendChild(option)
+        }
+        const option=document.createElement('option')
+        option.innerHTML='Create New Instance'
+        option.value=''
+        instance_select.appendChild(option)
+        instance_select.hidden=false
+    }
+    async function add_instance(name){
+        const option=document.createElement('option')
+        option.value=name
+        option.innerHTML=name
+        instance_select.prepend(option)
+        instance_select.value=name
+        load_config()
+    }
+    new_instance_form.onsubmit=(event)=>{
+        event.preventDefault()
+        add_instance(new_instance_form.instance_name.value)
+        new_instance_form.instance_name.value=''
+    }
+    asset_file_input.onchange=(event)=>{
+        for(const file of asset_file_input.files){
+            add_asset(file)
+        }
+        asset_file_input.value=''
+    }
+    obs.on('ConnectionClosed',(error)=>{
+        obs_status_span.innerHTML='Not connected to OBS'
+        console.error(error)
+    })
+    obs.on('Identified',()=>{
+        obs_status_span.innerHTML='Connected to OBS'
+        obs.call('GetInputList')
+        .then((response)=>{
+            for(const input of response.inputs){
+                const option=document.createElement('option')
+                option.value=input.inputName
+                obs_sources_datalist.append(option)
+            }
+        })
+    })
+    obs.on('InputCreated',(event)=>{
+        console.debug('source created: '+event.inputName)
+        const option=document.createElement('option')
+        option.value=event.inputName
+        obs_sources_datalist.append(option)    
+    })
+    obs.on('InputRemoved',(event)=>{
+        console.debug('source removed: '+event.inputName)
+        document.querySelector("option[value='"+event.inputName+"']").remove()
+    })
+    obs.on('InputNameChanged',(event)=>{
+        console.debug('source renamed :'+event.oldInputName+" > "+event.inputName)
+        document.querySelector("option[value='"+event.oldInputName+"']").value=event.inputName
+    })
+    async function obs_init(){
+        let obsurl
+        let obspassword
+        const search_params=new URLSearchParams(location.search)
+        if(search_params.has('obsurl')){
+            obsurl=search_params.get('obsurl')
+            obspassword=search_params.get('obspassword')
+            const url=new URL(obsurl)
+            url.password=obspassword
+            obs_token_input.value=url.href
+        }else{
+            if(obs_token_input.value){
+                const url=new URL(obs_token_input.value)
+                obspassword=url.password
+                url.password=''
+                obsurl=url.href
+            }else{
+                obs_status_span.innerHTML='No OBS Authorization found'
+            }
+        }
+        return obs.connect(obsurl,obspassword)
+    }
+    async function obs_auth(){
+        const url=new URL('https://sugoidogo.github.io/obsconnect')
+        url.searchParams.append('redirect_uri',location.href)
+        location.assign(url)
+    }
+    document.querySelector('button#obs_auth').onclick=obs_auth
+    instance_config_form.onsubmit=(event)=>{
+        event.preventDefault()
+        const config=getFormDataDeep(instance_config_form)
+        console.debug(config)
+        localStorage.setItem(instance_select.value,config)
+        const url=new URL(location.origin+location.pathname)
+        if(url.pathname.endsWith('/')){
+            url.pathname+='overlay.html'
+        }else{
+            const path=url.pathname.split('/')
+            path.pop()
+            path.push('overlay.html')
+            url.pathname=path.join('/')
+        }
+        url.searchParams.append('name',instance_select.value)
+        url.hash=JSON.stringify(config)
+        if(url.href.length>500000){
+            status_div.innerHTML="Too much data! That url probably won't work unless you use this page as a custom browser dock in OBS."
+            status_div.hidden=false
+        }
+        navigator.clipboard.writeText(url.href)
+    }
+    async function remove_instance(name=instance_select.value){
+        localStorage.removeItem(name)
+        .then(instance_select_init)
+        .then(load_config)
+    }
+    document.querySelector('button#remove_instance').onclick=()=>remove_instance()
+    
+
+    instance_select_init()
+    .then(load_config)
+
+</script>

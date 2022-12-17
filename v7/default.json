@@ -1,0 +1,20 @@
+{
+    "assets":[
+        {
+            "id":"bounce_animation",
+            "url":"bounce.css"
+        },
+        {
+            "id":"idle_half_brightness",
+            "url":"brightness.css"
+        },
+        {
+            "id":"blink_animation",
+            "url":"blink.html"
+        }
+    ],
+    "sources":[
+        "Mic/Aux"
+    ],
+    "obs_token":"ws://localhost:4455"
+}

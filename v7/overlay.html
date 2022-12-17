@@ -1,0 +1,126 @@
+<style>
+    body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    img {
+        position: absolute;
+        bottom: 0%;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        opacity: 0;
+    }
+
+    #idle:not(.active) {
+        opacity: 1;
+    }
+
+    #active.active {
+        opacity: 1;
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"
+    integrity="sha256-zBaNlfuSfUaxBDcmz+E5mOCJAv9j8kMw4rsikBCe0UU=" 
+    crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/obs-websocket-js@5.0.2/dist/obs-ws.min.js"
+    integrity="sha256-h/nnsIkJJZMNu08xQJBMuUvcrgcUj1YlTYmoA0q4Ep8=" 
+    crossorigin="anonymous"></script>
+<script type="module">
+    /** @type {Storage} */
+    const localStorage = localforage.createInstance({ name: 'pngtube.v7' })
+    const search_params = new URLSearchParams(location.search)
+    async function getConfig(){
+        try {
+            const config=JSON.parse(decodeURIComponent(location.hash.substring(1)))
+            localStorage.setItem(search_params.get('name'),config)
+            return config
+        } catch(error) {
+            console.warn(error)
+            return localStorage.getItem(search_params.get('name'))
+        }
+    }
+    // load config and assets
+    const config = await getConfig()
+    console.debug(config)
+    import loadAsset from '../js-util/AssetLoader.mjs'
+    if (!(config.assets instanceof Array)) {
+        config.assets = [config.assets]
+    }
+    if(typeof config.sources == 'string'){
+        config.sources=[config.sources]
+    }
+    for (const source of config.assets) {
+        const asset = await loadAsset(source.url, source.id)
+        if (asset instanceof HTMLScriptElement) {
+            asset.type = 'module'
+        }
+        if (asset instanceof HTMLElement) {
+            document.body.appendChild(asset)
+            continue
+        }
+        if (asset instanceof FontFace) {
+            document.fonts.add(asset)
+            continue
+        }
+        window[source.id] = asset
+    }
+    // backoff mechanism
+    let backoff=false
+    function backoffStart(event){
+        if(event instanceof AnimationEvent && getComputedStyle(event.target,event.pseudoElement).animationIterationCount=='infinite'){
+            return
+        }
+        backoff=true
+    }
+    function backoffEnd(){
+        backoff=false
+    }
+    window.ontransitionstart=backoffStart
+    window.ontransitionend=backoffEnd
+    window.ontransitioncancel=backoffEnd
+    window.onanimationstart=backoffStart
+    window.onanimationend=backoffEnd
+    window.ontransitioncancel=backoffEnd
+    // animation function
+    let active=false
+    requestAnimationFrame(function animate(){
+        if(!backoff){
+            for(const img of document.querySelectorAll('img')){
+                if(active){
+                    img.classList.add('active')
+                }else{
+                    img.classList.remove('active')
+                }
+            }
+        }
+        requestAnimationFrame(animate)
+    })
+    // obs connection
+    const obs = new OBSWebSocket()
+    obs.on('ConnectionClosed',(error)=>{
+        window.alert('PNGTube error '+error.code+': '+error.message)
+    })
+    obs.on('Identified',(event)=>{
+        console.debug(event)
+    })
+    obs.on('InputVolumeMeters',(event)=>{
+        const inputs=event.inputs.filter(input=>config.sources.includes(input.inputName))
+        for(const input of inputs){
+            for(const channel of input.inputLevelsMul){
+                if(channel[0]>0){
+                    active=true
+                    return
+                }
+            }
+        }
+        active=false
+    })
+    const token=new URL(config.obs_token)
+    const password=token.password
+    token.password=''
+    const url=token.href
+    obs.connect(url,password,{eventSubscriptions:(1 << 16)})
+</script>
