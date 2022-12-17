@@ -45,27 +45,15 @@
     // load config and assets
     const config = await getConfig()
     console.debug(config)
-    import loadAsset from '../js-util/AssetLoader.mjs'
     if (!(config.assets instanceof Array)) {
         config.assets = [config.assets]
     }
     if(typeof config.sources == 'string'){
         config.sources=[config.sources]
     }
+    import loadAsset from '../js-util/AssetLoader.mjs'
     for (const source of config.assets) {
-        const asset = await loadAsset(source.url, source.id)
-        if (asset instanceof HTMLScriptElement) {
-            asset.type = 'module'
-        }
-        if (asset instanceof HTMLElement) {
-            document.body.appendChild(asset)
-            continue
-        }
-        if (asset instanceof FontFace) {
-            document.fonts.add(asset)
-            continue
-        }
-        window[source.id] = asset
+        loadAsset(source.url, source.id, true)
     }
     // backoff mechanism
     let backoff=false
