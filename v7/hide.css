@@ -1,5 +1,3 @@
-@import url('basic.css');
-
 img {
     bottom:-100%;
     transition-property: bottom;
