@@ -439,7 +439,7 @@
         }
         url.searchParams.append('name',instance_select.value)
         url.hash=JSON.stringify(config)
-        if(url.href.length>500000){
+        if(url.href.length>30000){
             status_div.innerHTML="Too much data! That url probably won't work unless you use this page as a custom browser dock in OBS."
             status_div.hidden=false
         }
