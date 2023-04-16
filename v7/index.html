@@ -1,5 +1,4 @@
 <h1>PNGTube</h1>
-<div id="status">Loading...</div>
 <select id="instance" hidden></select>
 <form name="new_instance" hidden>
     <input type="text" name="instance_name" required>
@@ -68,6 +67,7 @@
             </td>
         </tr>
     </table>
+    <div id="status">Loading...</div>
     <button type="submit">Save & Copy URL</button>
 </form>
 
@@ -444,6 +444,12 @@
             status_div.hidden=false
         }
         navigator.clipboard.writeText(url.href)
+        .catch(function(){
+            url.hash=''
+            status_div.innerHTML='Auto Copy Failed! Please manually copy the following url:<br>'
+                +url.href+'<br>'
+            status_div.hidden=false
+        })
     }
     async function remove_instance(name=instance_select.value){
         localStorage.removeItem(name)
