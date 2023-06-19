@@ -1,0 +1,25 @@
+img {
+    --bounce-height: 5%;
+    height: calc(100% - var(--bounce-height));
+    bottom: 0%;
+}
+
+.active {
+    animation: bounce 0.5s;
+}
+
+@keyframes bounce {
+    0% {
+        bottom: 0%;
+        animation-timing-function: ease-out;
+    }
+
+    50% {
+        bottom: var(--bounce-height);
+        animation-timing-function: ease-in;
+    }
+
+    100% {
+        bottom: 0%;
+    }
+}

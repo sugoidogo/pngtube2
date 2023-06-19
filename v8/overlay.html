@@ -29,21 +29,6 @@
     integrity="sha256-h/nnsIkJJZMNu08xQJBMuUvcrgcUj1YlTYmoA0q4Ep8=" 
     crossorigin="anonymous"></script>
 <script type="module">
-    /** @type {Storage} */
-    const localStorage = localforage.createInstance({ name: 'pngtube.v7' })
-    const search_params = new URLSearchParams(location.search)
-    async function getConfig(){
-        try {
-            const config=JSON.parse(decodeURIComponent(location.hash.substring(1)))
-            localStorage.setItem(search_params.get('name'),config)
-            return config
-        } catch(error) {
-            console.warn(error)
-            return localStorage.getItem(search_params.get('name'))
-        }
-    }
-    // load config and assets
-    const config = await getConfig()
     console.debug(config)
     if (!(config.assets instanceof Array)) {
         config.assets = [config.assets]
@@ -51,7 +36,7 @@
     if(typeof config.sources == 'string'){
         config.sources=[config.sources]
     }
-    import loadAsset from '../js-util/AssetLoader.mjs'
+    import loadAsset from 'https://sugoidogo.github.io/js-util/AssetLoader.mjs'
     for (const source of config.assets) {
         loadAsset(source.url, source.id, true)
     }

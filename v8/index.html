@@ -68,7 +68,7 @@
         </tr>
     </table>
     <div id="status">Loading...</div>
-    <button type="submit">Save & Copy URL</button>
+    <button type="submit">Save & Download</button>
 </form>
 
 <datalist id="element_references"></datalist>
@@ -437,18 +437,16 @@
             path.push('overlay.html')
             url.pathname=path.join('/')
         }
-        url.searchParams.append('name',instance_select.value)
-        url.hash=JSON.stringify(config)
-        if(url.href.length>30000){
-            status_div.innerHTML="Too much data! That url probably won't work unless you use this page as a custom browser dock in OBS."
-            status_div.hidden=false
-        }
-        navigator.clipboard.writeText(url.href)
-        .catch(function(){
-            url.hash=''
-            status_div.innerHTML='Auto Copy Failed! Please manually copy the following url:<br>'
-                +url.href+'<br>'
-            status_div.hidden=false
+        fetch(url).then(response=>response.text())
+        .then(html=>{
+            const script=document.createElement('script')
+            script.innerHTML='const config='+JSON.stringify(config)
+            html+=script.outerHTML
+            const blob=new Blob([html])
+            const a=document.createElement('a')
+            a.href=URL.createObjectURL(blob)
+            a.download='pngtube-'+instance_select.value+'.html'
+            a.click()
         })
     }
     async function remove_instance(name=instance_select.value){

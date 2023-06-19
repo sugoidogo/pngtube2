@@ -1,0 +1,13 @@
+img {
+    bottom:-100%;
+    transition-property: bottom;
+    transition-duration: 0.5s;
+    transition-delay: 1s;
+    transition-timing-function: ease-in;
+}
+
+img.active{
+    bottom:0%;
+    transition-delay: 0s;
+    transition-timing-function: ease-out;
+}
