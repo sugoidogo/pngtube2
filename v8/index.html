@@ -139,6 +139,18 @@
     }catch(e){
         console.warn('automatic error reporting failed to load',e)
     }
+
+    try{
+        if(window.location.search.includes('remotejs')){
+            const channel=new URLSearchParams(window.location.search).get('remotejs')
+            const script=document.createElement('script')
+            script.src='https://remotejs.com/agent/agent.js'
+            script.setAttribute("data-consolejs-channel",channel)
+            document.head.appendChild(script)
+        }
+    }catch(e){
+        console.warn('remotejs load failed',e)
+    }
     
     import FileReaderAsync from '../js-util/FileReaderAsync.mjs'
     import {getFormDataDeep} from '../js-util/FormDataDeep.mjs'
