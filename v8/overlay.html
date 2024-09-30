@@ -29,6 +29,15 @@
     integrity="sha256-h/nnsIkJJZMNu08xQJBMuUvcrgcUj1YlTYmoA0q4Ep8=" 
     crossorigin="anonymous"></script>
 <script type="module">
+        try{
+        const sentry=await import('https://cdn.jsdelivr.net/npm/@sentry/browser@8/+esm')
+        sentry.init({
+            dsn:'https://d0b7617221824fafa3cd9a4d7039a612@app.glitchtip.com/8355'
+        })
+    }catch(e){
+        console.warn('automatic error reporting failed to load',e)
+    }
+    
     console.debug(config)
     if (!(config.assets instanceof Array)) {
         config.assets = [config.assets]
