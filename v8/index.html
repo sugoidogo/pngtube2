@@ -297,6 +297,10 @@
             }).then((response)=>{
                 obs.call('OpenInputFiltersDialog',{inputName:source_input.value})
             })
+        }).catch(error=>{
+            if(error.message='Not connected'){
+                alert('Not connected to OBS')
+            }
         })
     }
     async function add_source(name='Mic/Aux'){
