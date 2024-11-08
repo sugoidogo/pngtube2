@@ -133,6 +133,7 @@
         sentry.init({
             dsn:'https://d0b7617221824fafa3cd9a4d7039a612@app.glitchtip.com/8355',
             environment:location.hostname,
+            release:"8.1.0",
             integrations: [
                 sentry.feedbackIntegration({colorScheme:"light"})
             ]
